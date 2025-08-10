@@ -12,7 +12,7 @@ dependencies = [
     "uvicorn",
     "pydantic",
     "pulp",
-    "pydantic-settings",
+    "pyscipopt",
 ]
 
 [project.scripts]

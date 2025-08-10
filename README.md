@@ -17,7 +17,6 @@ This project provides a FastAPI-based web service for solving Mixed-Integer Prog
 - [Usage](#usage)
   - [API Endpoints](#api-endpoints)
   - [Python Client](#python-client)
-- [Configuration](#configuration)
 - [Testing](#testing)
 - [Docker](#docker)
 - [Releasing](#releasing)
@@ -31,7 +30,7 @@ This project provides a FastAPI-based web service for solving Mixed-Integer Prog
 -   **RESTful API**: Solve MIP problems via a clean and modern API.
 -   **Real-time Logging**: Stream solver logs in real-time to monitor progress.
 -   **Dedicated Python Client**: A `remip-client` library for easy integration with PuLP.
--   **Powered by SCIP**: Utilizes the powerful SCIP optimization suite.
+-   **Powered by PySCIPOpt**: Directly integrates with the SCIP optimization suite through its Python API for better performance and stability.
 -   **Containerized**: Comes with a Docker setup for easy and consistent deployment.
 
 ---
@@ -130,21 +129,6 @@ prob.solve(solver)
 print(f"Status: {prob.status}")
 for v in prob.variables():
     print(f"{v.name} = {v.varValue}")
-```
-
----
-
-## Configuration
-
-The application can be configured using environment variables.
-
--   `REMIP_SOLVER_PATH`: The path to the SCIP solver executable. Defaults to `scip`.
-
-**Example:**
-
-```bash
-export REMIP_SOLVER_PATH=/path/to/your/scip
-uvicorn remip.main:app --reload
 ```
 
 ---
