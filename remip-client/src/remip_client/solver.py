@@ -17,18 +17,20 @@ class MipApiSolver(LpSolver):
     Works in both CPython and Pyodide environments.
     """
 
-    def __init__(self, base_url="http://localhost:8000", **kwargs):
+    def __init__(self, base_url="http://localhost:8000", transport=None, **kwargs):
         super().__init__(**kwargs)
         self.base_url = base_url
+        self.transport = transport
+        self.client = None
 
     async def __aenter__(self):
-        # In CPython, httpx manages the client in a context block.
-        # In Pyodide, pyfetch doesn't need a client.
-        # So, nothing to do here.
+        if not is_pyodide:
+            self.client = httpx.AsyncClient(transport=self.transport)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        pass  # Nothing to clean up
+        if self.client:
+            await self.client.aclose()
 
     def actualSolve(self, lp: LpProblem):
         raise NotImplementedError(
@@ -55,12 +57,11 @@ class MipApiSolver(LpSolver):
                     return lp.status
                 solution = await response.json()
             else:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        f"{self.base_url}/solve", json=problem_dict
-                    )
-                    response.raise_for_status()
-                    solution = response.json()
+                response = await self.client.post(
+                    f"{self.base_url}/solve", json=problem_dict
+                )
+                response.raise_for_status()
+                solution = response.json()
 
         except Exception as e:
             print(f"Could not connect to API or other error occurred: {e}")

@@ -22,7 +22,7 @@ async def test_client_solve_with_mock():
             200,
             json={
                 "name": "test_problem_mock",
-                "status": "Optimal",
+                "status": "optimal",
                 "objective_value": 1.0,
                 "variables": {"x": 1.0, "y": 0.0}
             }
