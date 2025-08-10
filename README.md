@@ -38,9 +38,9 @@ This project provides a FastAPI-based web service for solving Mixed-Integer Prog
     ```
 
 4.  **Install the Client:**
-    To install the client library, navigate to the `mip-client` directory and install it:
+    To install the client library, navigate to the `mip-api-client` directory and install it:
     ```bash
-    cd mip-client
+    cd mip-api-client
     uv pip install -e .
     cd ..
     ```
@@ -65,13 +65,13 @@ The API will be available at `http://localhost:8000`.
 
 ### Python Client
 
-The `mip-client` library provides a PuLP-compatible solver interface.
+The `mip-api-client` library provides a PuLP-compatible solver interface.
 
 **Example:**
 
 ```python
 from pulp import LpProblem, LpVariable, lpSum, LpMinimize
-from mip_client.solver import MipApiSolver
+from mip_api_client.solver import MipApiSolver
 
 # 1. Create a problem
 prob = LpProblem("test_problem", LpMinimize)
