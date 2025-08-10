@@ -1,9 +1,11 @@
-import pytest
-from fastapi.testclient import TestClient
-from remip.main import app, get_solver_service
-from remip.models import MIPSolution, MIPProblem
-from remip.services import MIPSolverService
 from typing import AsyncGenerator
+
+from fastapi.testclient import TestClient
+
+from remip.main import app, get_solver_service
+from remip.models import MIPProblem, MIPSolution
+from remip.services import MIPSolverService
+
 
 class MockMIPSolverService(MIPSolverService):
     async def solve_problem(self, problem_data: MIPProblem) -> MIPSolution:

@@ -1,11 +1,13 @@
-from fastapi import FastAPI, Depends
+from pathlib import Path
+
+import uvicorn
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
+
 from .models import MIPProblem, MIPSolution
 from .services import MIPSolverService
-import uvicorn
 
 app = FastAPI()
 

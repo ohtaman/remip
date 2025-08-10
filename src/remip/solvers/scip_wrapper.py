@@ -1,8 +1,11 @@
-from pyscipopt import Model, SCIP_RESULT, SCIP_PARAMSETTING
-from ..models import MIPProblem, MIPSolution
-from typing import AsyncGenerator
 import asyncio
 import threading
+from typing import AsyncGenerator
+
+from pyscipopt import Model
+
+from ..models import MIPProblem, MIPSolution
+
 
 class ScipSolverWrapper:
     """

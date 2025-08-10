@@ -1,6 +1,8 @@
+from typing import AsyncGenerator
+
 from .models import MIPProblem, MIPSolution
 from .solvers.scip_wrapper import ScipSolverWrapper
-from typing import AsyncGenerator
+
 
 class MIPSolverService:
     """

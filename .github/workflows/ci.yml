@@ -2,26 +2,47 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  build:
+  test-server:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.11']
+        python-version: ["3.11"]
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up uv
-      uses: astral-sh/setup-uv@v1
-      with:
-        python-version: ${{ matrix.python-version }}
+      - uses: actions/checkout@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Install dependencies
-      run: uv sync --group test
+      - name: Install dependencies
+        run: uv sync --group dev
 
-    - name: Run tests
-      run: uv run pytest
+      - name: Run tests
+        run: uv run pytest
+
+  test-client:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        working-directory: ./remip-client
+        run: uv sync --group dev
+
+      - name: Run tests
+        working-directory: ./remip-client
+        run: uv run pytest

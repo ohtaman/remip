@@ -1,7 +1,10 @@
-import pytest
 from unittest.mock import MagicMock, patch
-from remip.models import MIPProblem, Objective, ObjectiveCoefficient, Variable, Parameters
+
+import pytest
+
+from remip.models import MIPProblem, Objective, ObjectiveCoefficient, Parameters, Variable
 from remip.solvers.scip_wrapper import ScipSolverWrapper
+
 
 @pytest.fixture
 def solver_wrapper():

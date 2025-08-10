@@ -1,6 +1,8 @@
 import pytest
 from pydantic import ValidationError
-from remip.models import MIPProblem, Parameters, Objective, ObjectiveCoefficient, Variable, Constraint
+
+from remip.models import MIPProblem
+
 
 def test_mip_problem_valid():
     data = {

@@ -1,6 +1,7 @@
-from pulp import LpSolver, LpProblem, constants
-import sys
 import json
+import sys
+
+from pulp import LpProblem, LpSolver, constants
 
 is_pyodide = "pyodide" in sys.modules
 
