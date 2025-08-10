@@ -26,6 +26,12 @@ class MipApiSolver(LpSolver):
         except httpx.RequestError:
             return False
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.client.close()
+
     def actualSolve(self, lp: LpProblem):
         """
         Solves the problem by sending it to the MIP Solver API.
@@ -51,7 +57,14 @@ class MipApiSolver(LpSolver):
         solution = response.json()
 
         # 4. Update the LpProblem object with the solution
-        lp.status = constants.LpStatus[solution['status']]
+        status_map = {
+            "optimal": constants.LpStatusOptimal,
+            "infeasible": constants.LpStatusInfeasible,
+            "unbounded": constants.LpStatusUnbounded,
+            "not solved": constants.LpStatusNotSolved,
+            "timelimit": constants.LpStatusNotSolved, # Or a custom status
+        }
+        lp.status = status_map.get(solution['status'], constants.LpStatusUndefined)
         lp.objective.value = solution['objective_value']
 
         for var in lp.variables():

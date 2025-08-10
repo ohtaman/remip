@@ -45,5 +45,5 @@ class MIPSolution(BaseModel):
     """
     name: str
     status: str
-    objective_value: float
+    objective_value: Optional[float]
     variables: Dict[str, float]

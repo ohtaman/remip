@@ -57,28 +57,29 @@ class ScipSolverWrapper:
                 vtype="C" if var_data.cat == "Continuous" else "I"
             )
         for const_data in problem.constraints:
-            coeffs = {vars[c.name]: c.value for c in const_data.coefficients}
+            coeffs = {c.name: c.value for c in const_data.coefficients}
             sense = const_data.sense
-            rhs = 0.0
-            if const_data.constant:
-                rhs = -const_data.constant
+            rhs = -const_data.constant if const_data.constant is not None else 0.0
 
+            expr = sum(coeffs[name] * var for name, var in vars.items() if name in coeffs)
             if sense == 0: # EQ
-                model.addCons(sum(c * v for v, c in coeffs.items()) == rhs)
+                model.addCons(expr == rhs)
             elif sense == -1: # LEQ
-                model.addCons(sum(c * v for v, c in coeffs.items()) <= rhs)
+                model.addCons(expr <= rhs)
             else: # GEQ
-                model.addCons(sum(c * v for v, c in coeffs.items()) >= rhs)
+                model.addCons(expr >= rhs)
 
-        obj_coeffs = {vars[c.name]: c.value for c in problem.objective.coefficients}
-        model.setObjective(sum(c * v for v, c in obj_coeffs.items()), "minimize" if problem.parameters.sense == 1 else "maximize")
+        obj_coeffs = {c.name: c.value for c in problem.objective.coefficients}
+        objective = sum(obj_coeffs[name] * var for name, var in vars.items() if name in obj_coeffs)
+        model.setObjective(objective, "minimize" if problem.parameters.sense == 1 else "maximize")
         return model, vars
 
     def _extract_solution(self, model, problem, vars):
         status = model.getStatus()
-        objective_value = model.getObjVal()
+        objective_value = None
         solution_vars = {}
         if model.getNSols() > 0:
+            objective_value = model.getObjVal()
             solution = model.getBestSol()
             for var_name, var in vars.items():
                 solution_vars[var_name] = solution[var]

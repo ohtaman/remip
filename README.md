@@ -50,6 +50,7 @@ Both packages follow the standard `src` layout for clean and maintainable code.
 
 ### Prerequisites
 
+-   **SCIP Optimization Suite**: This project uses `pyscipopt`, which requires a working installation of the SCIP Optimization Suite. You can download it from the [official SCIP website](https://scipopt.org/index.php#download). Please follow their installation instructions.
 -   Python 3.11+
 -   [uv](https://github.com/astral-sh/uv): A fast Python package installer.
 -   [Docker](https://www.docker.com/): For running the application in a container.
@@ -109,21 +110,20 @@ The `remip-client` library provides a PuLP-compatible solver interface.
 **Example:**
 
 ```python
-from pulp import LpProblem, LpVariable, lpSum, LpMinimize
+from pulp import LpProblem, LpVariable, lpSum, LpMaximize
 from remip_client.solver import MipApiSolver
 
 # 1. Define a problem
-prob = LpProblem("test_problem", LpMinimize)
-x = LpVariable("x", 0, 1)
-y = LpVariable("y", 0, 1)
+prob = LpProblem("test_problem", LpMaximize)
+x = LpVariable("x", 0, 1, cat='Binary')
+y = LpVariable("y", 0, 1, cat='Binary')
 prob += x + y, "objective"
-prob += 2*x + y <= 1, "constraint1"
+prob += 2*x + y <= 2, "constraint1"
 
 # 2. Initialize the remote solver
-solver = MipApiSolver(base_url="http://localhost:8000")
-
-# 3. Solve the problem via the API
-prob.solve(solver)
+with MipApiSolver(base_url="http://localhost:8000") as solver:
+    # 3. Solve the problem via the API
+    prob.solve(solver)
 
 # 4. Print the results
 print(f"Status: {prob.status}")
