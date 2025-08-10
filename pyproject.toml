@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn",
     "pydantic",
     "pulp",
+    "pydantic-settings",
 ]
 
 [project.scripts]

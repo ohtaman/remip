@@ -2,6 +2,7 @@ import asyncio
 import tempfile
 import os
 from ..models import MIPProblem, MIPSolution
+from ..config import settings
 from typing import AsyncGenerator
 
 class ScipSolverWrapper:
@@ -22,7 +23,7 @@ class ScipSolverWrapper:
         try:
             # Run SCIP solver
             process = await asyncio.create_subprocess_exec(
-                "scip",
+                settings.solver_path,
                 "-f", lp_file_path,
                 "-l", "/dev/null", # Disable interactive log
                 "-q", # Quiet mode
@@ -140,7 +141,7 @@ class ScipSolverWrapper:
 
         try:
             process = await asyncio.create_subprocess_exec(
-                "scip",
+                settings.solver_path,
                 "-f", lp_file_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT, # Redirect stderr to stdout
