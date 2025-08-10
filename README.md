@@ -157,11 +157,39 @@ for v in prob.variables():
 
 ## Testing
 
-To run the full test suite for the server:
+### Automated Test Suite
+
+The project includes a full suite of automated tests for both the server and the CPython client.
+
+To run the full test suite:
 
 ```bash
 uv run pytest
 ```
+
+### Manual Browser Test
+
+The `remip-client` includes an integration test that runs in the browser using Pyodide. This test solves a small MIP problem by communicating with the live server from a web page.
+
+To run the browser test:
+
+1.  **Start the API Server:** Make sure the ReMIP server is running.
+    ```bash
+    uvicorn src.remip.main:app --host 0.0.0.0 --port 8000
+    ```
+
+2.  **Build the Client Wheel:** The test page needs the `remip-client` package built as a wheel file.
+    ```bash
+    # From the project root directory
+    cd remip-client
+    python -m build --wheel
+    cd ..
+    ```
+
+3.  **Access the Test Page:** The main server also hosts the client files. Open your web browser and navigate to:
+    [http://localhost:8000/test_pyodide.html](http://localhost:8000/test_pyodide.html)
+
+4.  **Check the Console:** Open your browser's developer console. You should see the output of the test, including the final solution and a "Test assertions passed" message.
 
 ---
 

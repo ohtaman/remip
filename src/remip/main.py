@@ -1,10 +1,21 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from .models import MIPProblem, MIPSolution
 from .services import MIPSolverService
 import uvicorn
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def get_solver_service():
     return MIPSolverService()
@@ -29,6 +40,12 @@ async def solver_info():
     Returns information about the solver.
     """
     return {"solver": "SCIP", "version": "x.y.z"}
+
+
+# Serve static files from the remip-client directory
+static_dir = Path(__file__).parent.parent.parent / "remip-client"
+app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
 
 def main():
     """

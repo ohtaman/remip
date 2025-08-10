@@ -1,0 +1,59 @@
+<html>
+  <head>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+  </head>
+  <body>
+    <script type="text/javascript">
+      async function main() {
+        let pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/" });
+        await pyodide.loadPackage("micropip");
+        const micropip = pyodide.pyimport("micropip");
+        await micropip.install(["pulp", "pyodide-http"]);
+        await micropip.install('./dist/remip_client-0.1.0-py3-none-any.whl');
+
+        const pythonCode = `
+from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpStatus
+from remip_client.solver import MipApiSolver
+
+try:
+    print("--- Defining problem ---")
+    prob = LpProblem("test_problem", LpMaximize)
+    x = LpVariable("x", 0, 1, cat='Binary')
+    y = LpVariable("y", 0, 1, cat='Binary')
+    prob += x + y, "objective"
+    prob += 2*x + y <= 2, "constraint1"
+    print("--- Problem defined ---")
+
+    print("--- Initializing solver ---")
+    async with MipApiSolver(base_url="http://localhost:8000") as solver:
+        print("--- Solver initialized. Calling solver.solve() ---")
+        await solver.solve(prob)
+        print("--- solver.solve() finished ---")
+
+    print("--- Printing results ---")
+    print(f"Status: {LpStatus[prob.status]}")
+    for v in prob.variables():
+        print(f"{v.name} = {v.varValue}")
+
+    assert prob.status == 1
+    assert x.varValue == 1.0
+    assert y.varValue == 0.0
+    print("--- Test assertions passed ---")
+
+except Exception as e:
+    print(f"--- ERROR during test: {e} ---")
+    import traceback
+    traceback.print_exc()
+`;
+
+        try {
+          await pyodide.runPythonAsync(pythonCode);
+          console.log("Test passed!");
+        } catch (e) {
+          console.error("Test failed:", e);
+        }
+      }
+      main();
+    </script>
+  </body>
+</html>

@@ -13,7 +13,7 @@ class ScipSolverWrapper:
         """
         Solves a MIP problem using pyscipopt.
         """
-        model, vars = self._build_model(problem)
+        model, vars = await self._build_model(problem)
         model.optimize()
         return self._extract_solution(model, problem, vars)
 
@@ -27,7 +27,7 @@ class ScipSolverWrapper:
         def message_hdlr(msg):
             asyncio.run_coroutine_threadsafe(log_queue.put(msg), asyncio.get_running_loop())
 
-        model, vars = self._build_model(problem)
+        model, vars = await self._build_model(problem)
         model.setMessagehdlr(message_hdlr, quiet=False)
 
         def optimize_in_thread():
@@ -46,7 +46,7 @@ class ScipSolverWrapper:
         
         solver_thread.join()
 
-    def _build_model(self, problem: MIPProblem):
+    async def _build_model(self, problem: MIPProblem):
         model = Model(problem.parameters.name)
         vars = {}
         for var_data in problem.variables:

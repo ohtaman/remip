@@ -1,1 +1,21 @@
 server3.log
+server.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+
+# Client build artifacts
+remip-client/dist/
+remip-client/.venv/
+remip-client/__pycache__/
+
+# Environment and lock files
+.env
+.gemini/
+*.lock
