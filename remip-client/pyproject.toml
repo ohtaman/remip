@@ -20,8 +20,11 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 test = [
-    "-e ..",
+    "remip",
     "pytest",
     "pytest-asyncio",
     "uvicorn",
 ]
+
+[tool.uv.sources]
+remip = { path = "..", editable = true }
