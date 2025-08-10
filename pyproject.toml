@@ -1,5 +1,5 @@
 [project]
-name = "mip-api"
+name = "remip"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-mip-api = "mip_api:main"
+remip = "remip.main:main"
 
 [project.optional-dependencies]
 test = [

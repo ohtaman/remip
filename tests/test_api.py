@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from mip_api.main import app
+from remip.main import app
 
 client = TestClient(app)
 

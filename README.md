@@ -1,4 +1,4 @@
-# MIP Solver API
+# remip
 
 This project provides a FastAPI-based web service for solving Mixed-Integer Programming (MIP) problems. It also includes a Python client library that integrates with the PuLP modeling language.
 
@@ -20,10 +20,11 @@ This project provides a FastAPI-based web service for solving Mixed-Integer Prog
 
 ### Installation
 
-1.  **Clone the repository:**
+1.  **Clone the repository (and rename the root directory):**
     ```bash
     git clone <repository-url>
-    cd mip-api
+    mv mip-api remip
+    cd remip
     ```
 
 2.  **Set up the environment:**
@@ -38,9 +39,9 @@ This project provides a FastAPI-based web service for solving Mixed-Integer Prog
     ```
 
 4.  **Install the Client:**
-    To install the client library, navigate to the `mip-api-client` directory and install it:
+    To install the client library, navigate to the `remip-client` directory and install it:
     ```bash
-    cd mip-api-client
+    cd remip-client
     uv pip install -e .
     cd ..
     ```
@@ -50,7 +51,7 @@ This project provides a FastAPI-based web service for solving Mixed-Integer Prog
 To run the API server locally, use the following command:
 
 ```bash
-uvicorn mip_api.main:app --reload
+uvicorn remip.main:app --reload
 ```
 
 The API will be available at `http://localhost:8000`.
@@ -65,13 +66,13 @@ The API will be available at `http://localhost:8000`.
 
 ### Python Client
 
-The `mip-api-client` library provides a PuLP-compatible solver interface.
+The `remip-client` library provides a PuLP-compatible solver interface.
 
 **Example:**
 
 ```python
 from pulp import LpProblem, LpVariable, lpSum, LpMinimize
-from mip_api_client.solver import MipApiSolver
+from remip_client.solver import MipApiSolver
 
 # 1. Create a problem
 prob = LpProblem("test_problem", LpMinimize)
