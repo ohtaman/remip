@@ -26,10 +26,23 @@ This project provides a FastAPI-based web service for solving Mixed-Integer Prog
     cd mip-api
     ```
 
-2.  **Create a virtual environment and install dependencies:**
+2.  **Set up the environment:**
     ```bash
     uv venv
-    uv sync --all-extras
+    ```
+
+3.  **Install the Server:**
+    To install the server with its dependencies, run the following command from the root of the project:
+    ```bash
+    uv pip install -e .[test]
+    ```
+
+4.  **Install the Client:**
+    To install the client library, navigate to the `mip-client` directory and install it:
+    ```bash
+    cd mip-client
+    uv pip install -e .
+    cd ..
     ```
 
 ### Running the API

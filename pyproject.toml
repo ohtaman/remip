@@ -12,7 +12,6 @@ dependencies = [
     "uvicorn",
     "pydantic",
     "pulp",
-    "httpx",
 ]
 
 [project.scripts]
@@ -21,7 +20,6 @@ mip-api = "mip_api:main"
 [project.optional-dependencies]
 test = [
     "pytest",
-    "httpx",
 ]
 
 [build-system]
