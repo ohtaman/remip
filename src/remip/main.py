@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends
 from fastapi.responses import StreamingResponse
 from .models import MIPProblem, MIPSolution
 from .services import MIPSolverService
+import uvicorn
 
 app = FastAPI()
 
@@ -28,3 +29,12 @@ async def solver_info():
     Returns information about the solver.
     """
     return {"solver": "SCIP", "version": "x.y.z"}
+
+def main():
+    """
+    Runs the FastAPI application using uvicorn.
+    """
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+if __name__ == "__main__":
+    main()
