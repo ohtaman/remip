@@ -19,12 +19,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
-test = [
-    "remip",
+dev = [
     "pytest",
     "pytest-asyncio",
     "uvicorn",
 ]
-
-[tool.uv.sources]
-remip = { path = "..", editable = true }

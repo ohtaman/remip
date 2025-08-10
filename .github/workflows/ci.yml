@@ -41,7 +41,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./remip-client
-        run: uv sync --group test
+        run: uv sync --group dev
 
       - name: Run tests
         working-directory: ./remip-client
