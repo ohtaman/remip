@@ -1,5 +1,7 @@
 # remip
 
+**ReMIP** stands for **R**emote **E**xecution for **M**ixed-**I**nteger **P**rogramming, and also **R**emote **E**xecution **M**akes **I**deals **P**ossible.
+
 This project provides a FastAPI-based web service for solving Mixed-Integer Programming (MIP) problems. It also includes a Python client library that integrates with the PuLP modeling language.
 
 ## Features
