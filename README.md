@@ -191,6 +191,45 @@ To run the browser test:
 
 4.  **Check the Console:** Open your browser's developer console. You should see the output of the test, including the final solution and a "Test assertions passed" message.
 
+### Node.js (Pyodide) Test
+
+This project also includes a test to verify that the `remip-client` works in a Node.js environment using Pyodide.
+
+**Setup:**
+
+1.  Navigate to the test directory:
+    ```bash
+    cd remip-client/tests/node
+    ```
+2.  Install the Node.js dependencies:
+    ```bash
+    npm install
+    ```
+
+**Running the Test:**
+
+1.  **Start the API Server:** Make sure the ReMIP server is running in another terminal.
+    ```bash
+    # From the project root
+    uvicorn src.remip.main:app --host 0.0.0.0 --port 8000
+    ```
+
+2.  **Build the Client Wheel:** The test needs the `remip-client` package built as a wheel file.
+    ```bash
+    # From the project root
+    cd remip-client
+    python -m build --wheel
+    cd ..
+    ```
+
+3.  **Run the Node.js Test:** Execute the test script using the following command from the project root. The `--experimental-wasm-stack-switching` flag is required by Pyodide.
+    ```bash
+    # From the project root
+    node --experimental-wasm-stack-switching remip-client/tests/node/index.js
+    ```
+
+4.  You should see "--- Node.js Test Succeeded! --- " if the test passes.
+
 ---
 
 ## Docker
