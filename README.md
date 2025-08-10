@@ -107,6 +107,14 @@ The API will be available at `http://localhost:8000`.
 
 The `remip-client` library provides a PuLP-compatible solver interface.
 
+### Pyodide Support
+
+The client can be used in a Pyodide environment to solve MIP problems in the browser. To use the client in a Pyodide environment, install it with the `pyodide` extra:
+
+```bash
+micropip.install("remip-client[pyodide]")
+```
+
 **Example:**
 
 ```python

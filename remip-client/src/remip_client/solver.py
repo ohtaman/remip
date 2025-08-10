@@ -1,6 +1,8 @@
 from pulp import LpSolver, LpProblem, constants
 import httpx
 
+import sys
+
 class MipApiSolver(LpSolver):
     """
     A PuLP solver that uses the MIP Solver API.
@@ -14,6 +16,11 @@ class MipApiSolver(LpSolver):
         """
         super().__init__(**kwargs)
         self.base_url = base_url
+
+        if "pyodide" in sys.modules:
+            import pyodide_http
+            pyodide_http.patch_all()
+
         self.client = httpx.Client()
 
     def available(self):
