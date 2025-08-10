@@ -47,9 +47,9 @@ class ScipSolverWrapper:
         solver_thread.join()
 
     def _build_model(self, problem: MIPProblem):
-        model = Model(problem.name)
+        model = Model(problem.parameters.name)
         vars = {}
-        for var_data in problem.variables.values():
+        for var_data in problem.variables:
             vars[var_data.name] = model.addVar(
                 name=var_data.name,
                 lb=var_data.lowBound,
@@ -57,14 +57,21 @@ class ScipSolverWrapper:
                 vtype="C" if var_data.cat == "Continuous" else "I"
             )
         for const_data in problem.constraints:
-            coeffs = {vars[c['name']]: c['value'] for c in const_data['coefficients']}
-            sense = const_data['sense']
-            rhs = const_data['rhs']
-            if sense == 0: model.addCons(sum(c * v for v, c in coeffs.items()) == rhs)
-            elif sense == -1: model.addCons(sum(c * v for v, c in coeffs.items()) <= rhs)
-            else: model.addCons(sum(c * v for v, c in coeffs.items()) >= rhs)
+            coeffs = {vars[c.name]: c.value for c in const_data.coefficients}
+            sense = const_data.sense
+            rhs = 0.0
+            if const_data.constant:
+                rhs = -const_data.constant
+
+            if sense == 0: # EQ
+                model.addCons(sum(c * v for v, c in coeffs.items()) == rhs)
+            elif sense == -1: # LEQ
+                model.addCons(sum(c * v for v, c in coeffs.items()) <= rhs)
+            else: # GEQ
+                model.addCons(sum(c * v for v, c in coeffs.items()) >= rhs)
+
         obj_coeffs = {vars[c.name]: c.value for c in problem.objective.coefficients}
-        model.setObjective(sum(c * v for v, c in obj_coeffs.items()), "minimize" if problem.sense == 1 else "maximize")
+        model.setObjective(sum(c * v for v, c in obj_coeffs.items()), "minimize" if problem.parameters.sense == 1 else "maximize")
         return model, vars
 
     def _extract_solution(self, model, problem, vars):
@@ -76,7 +83,7 @@ class ScipSolverWrapper:
             for var_name, var in vars.items():
                 solution_vars[var_name] = solution[var]
         return MIPSolution(
-            name=problem.name,
+            name=problem.parameters.name,
             status=status,
             objective_value=objective_value,
             variables=solution_vars

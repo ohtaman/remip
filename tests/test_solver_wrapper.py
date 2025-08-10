@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from remip.models import MIPProblem, Objective, ObjectiveCoefficient, Variable
+from remip.models import MIPProblem, Objective, ObjectiveCoefficient, Variable, Parameters
 from remip.solvers.scip_wrapper import ScipSolverWrapper
 
 @pytest.fixture
@@ -10,11 +10,10 @@ def solver_wrapper():
 @pytest.fixture
 def sample_problem():
     return MIPProblem(
-        name="test_problem",
-        sense=1,
+        parameters=Parameters(name="test_problem", sense=1, status=0, sol_status=0),
         objective=Objective(name="obj", coefficients=[ObjectiveCoefficient(name="x", value=1.0)]),
         constraints=[],
-        variables={"x": Variable(name="x", lowBound=0, upBound=1, cat="Continuous")}
+        variables=[Variable(name="x", lowBound=0, upBound=1, cat="Continuous")]
     )
 
 @patch('remip.solvers.scip_wrapper.Model')

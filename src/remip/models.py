@@ -1,6 +1,12 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 
+class Parameters(BaseModel):
+    name: str
+    sense: int
+    status: int
+    sol_status: int
+
 class ObjectiveCoefficient(BaseModel):
     name: str
     value: float
@@ -11,20 +17,27 @@ class Objective(BaseModel):
 
 class Variable(BaseModel):
     name: str
+    cat: str
     lowBound: Optional[float] = None
     upBound: Optional[float] = None
-    cat: str
+    varValue: Optional[float] = None
+    dj: Optional[float] = None
 
-class MIPProblem(BaseModel):
-    """
-    Represents a Mixed-Integer Programming problem based on PuLP's to_dict() structure.
-    """
+class Constraint(BaseModel):
     name: str
     sense: int
+    coefficients: List[ObjectiveCoefficient]
+    pi: Optional[float] = None
+    constant: Optional[float] = None
+
+class MIPProblem(BaseModel):
+    parameters: Parameters
     objective: Objective
-    constraints: List[Dict] # Keeping constraints as Dict for now to avoid too much complexity
-    variables: Dict[str, Variable]
-    solver_options: Optional[Dict[str, Any]] = None # For solver-specific kwargs
+    variables: List[Variable]
+    constraints: List[Constraint]
+    sos1: List[Dict] = []
+    sos2: List[Dict] = []
+    solver_options: Optional[Dict[str, Any]] = None
 
 class MIPSolution(BaseModel):
     """
