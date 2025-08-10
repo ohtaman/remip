@@ -22,5 +22,4 @@ build-backend = "hatchling.build"
 dev = [
     "pytest",
     "pytest-asyncio",
-    "uvicorn",
 ]
