@@ -1,10 +1,8 @@
-from pathlib import Path
 
 import uvicorn
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
 
 from .models import MIPProblem, MIPSolution
 from .services import MIPSolverService
@@ -44,9 +42,7 @@ async def solver_info():
     return {"solver": "SCIP", "version": "x.y.z"}
 
 
-# Serve static files from the remip-client directory
-static_dir = Path(__file__).parent.parent.parent / "remip-client"
-app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
 
 
 def main():
