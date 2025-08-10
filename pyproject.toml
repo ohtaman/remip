@@ -20,6 +20,8 @@ remip = "remip.main:main"
 [project.optional-dependencies]
 test = [
     "pytest",
+    "pytest-asyncio",
+    "httpx",
 ]
 
 [build-system]
