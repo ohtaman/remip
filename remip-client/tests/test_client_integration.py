@@ -11,7 +11,7 @@ from remip_client.solver import MipApiSolver
 def live_server():
     # Command to start the server
     # Note: Using 127.0.0.1 to be explicit
-    command = ["uv", "run", "uvicorn", "src.remip.main:app", "--host", "127.0.0.1", "--port", "8000"]
+    command = ["uv", "run", "uvicorn", "remip.main:app", "--host", "127.0.0.1", "--port", "8000"]
     
     # Start the server as a background process
     server_process = subprocess.Popen(command)
