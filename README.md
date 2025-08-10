@@ -125,8 +125,22 @@ with MipApiSolver(base_url="http://localhost:8000") as solver:
     # 3. Solve the problem via the API
     prob.solve(solver)
 
+from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpStatus
+
+# 1. Define a problem
+prob = LpProblem("test_problem", LpMaximize)
+x = LpVariable("x", 0, 1, cat='Binary')
+y = LpVariable("y", 0, 1, cat='Binary')
+prob += x + y, "objective"
+prob += 2*x + y <= 2, "constraint1"
+
+# 2. Initialize the remote solver
+with MipApiSolver(base_url="http://localhost:8000") as solver:
+    # 3. Solve the problem via the API
+    prob.solve(solver)
+
 # 4. Print the results
-print(f"Status: {prob.status}")
+print(f"Status: {LpStatus[prob.status]}")
 for v in prob.variables():
     print(f"{v.name} = {v.varValue}")
 ```
