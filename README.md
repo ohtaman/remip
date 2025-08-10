@@ -19,6 +19,7 @@ This project provides a FastAPI-based web service for solving Mixed-Integer Prog
   - [Python Client](#python-client)
 - [Testing](#testing)
 - [Docker](#docker)
+- [Releasing](#releasing)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -150,6 +151,19 @@ To build and run the application using Docker:
 docker-compose build
 docker-compose up
 ```
+
+---
+
+## Releasing
+
+This project uses [GitHub Actions](https://github.com/features/actions) to automate the release process.
+
+A new release is created automatically whenever a new tag is pushed to the repository that starts with `v` (e.g., `v1.0.0`, `v1.1.0-alpha`).
+
+The release workflow will:
+1.  Build the server and client packages.
+2.  Create a new GitHub Release with the tag name.
+3.  Upload the built packages as assets to the release.
 
 ---
 
