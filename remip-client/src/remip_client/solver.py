@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sys
 
@@ -33,9 +34,12 @@ class MipApiSolver(LpSolver):
             await self.client.aclose()
 
     def actualSolve(self, lp: LpProblem):
-        raise NotImplementedError(
-            "This solver is async-only. Please call the .solve() method instead."
-        )
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self.solve(lp))
+        else:
+            return asyncio.ensure_future(self.solve(lp))
 
     async def solve(self, lp: LpProblem):
         """
