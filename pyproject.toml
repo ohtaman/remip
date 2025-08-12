@@ -28,6 +28,9 @@ source = "vcs"
 line-length = 128
 select = ["E", "F", "I"]
 
+[tool.hatch.workspaces]
+packages = ["./remip-client"]
+
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",

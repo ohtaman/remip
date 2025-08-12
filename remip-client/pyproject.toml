@@ -1,6 +1,6 @@
 [project]
 name = "remip-client"
-dynamic = ["version"]
+version = "0.1.0"
 description = "A client library for the MIP Solver API"
 authors = [
     { name = "ohtaman", email = "ohtamans@gmail.com" }
@@ -15,11 +15,8 @@ dependencies = [
 pyodide = ["pyodide-http"]
 
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.hatch.version]
-source = "vcs"
 
 [dependency-groups]
 dev = [
