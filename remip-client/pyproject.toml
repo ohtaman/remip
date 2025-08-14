@@ -1,6 +1,6 @@
 [project]
 name = "remip-client"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A client library for the MIP Solver API"
 authors = [
     { name = "ohtaman", email = "ohtamans@gmail.com" }
@@ -20,5 +20,12 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.1.0"
+
+[tool.setuptools_scm]
+root = ".."

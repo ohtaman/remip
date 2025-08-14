@@ -23,6 +23,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.version]
 source = "vcs"
+fallback-version = "0.1.0"
+
+# setuptools-scm を親ディレクトリの .git を基準に動かす
+[tool.setuptools_scm]
+root = ".."
 
 [tool.ruff]
 line-length = 128
