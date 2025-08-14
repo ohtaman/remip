@@ -31,7 +31,7 @@ select = ["E", "F", "I"]
 [tool.hatch.workspaces]
 packages = ["./remip-client"]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "httpx>=0.28.1",
     "pulp>=3.2.2",
