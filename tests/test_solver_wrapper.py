@@ -52,6 +52,8 @@ async def test_solve_and_stream_logs_sets_message_handler(MockModel, solver_wrap
     # Arrange
     mock_model_instance = MagicMock()
     MockModel.return_value = mock_model_instance
+    mock_model_instance.getNSols.return_value = 0  # Avoid TypeError
+    mock_model_instance.getStatus.return_value = "not solved"  # Avoid ValidationError
 
     # Act
     # We need to consume the generator to execute the code

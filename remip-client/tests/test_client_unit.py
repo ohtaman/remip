@@ -1,7 +1,9 @@
+import json
+
 import httpx
 import pytest
-from pulp import LpMaximize, LpProblem, LpVariable
-from remip_client.solver import MipApiSolver
+from pulp import LpMaximize, LpProblem, LpVariable, constants
+from remip_client.solver import ReMIPSolver
 
 
 @pytest.mark.asyncio
@@ -18,24 +20,25 @@ async def test_client_async_solve():
 
     # 2. Create a mock transport
     def mock_transport(request: httpx.Request) -> httpx.Response:
+        solution = {
+            "name": "test_problem_mock",
+            "status": "optimal",
+            "objective_value": 1.0,
+            "variables": {"x": 1.0, "y": 0.0}
+        }
         return httpx.Response(
             200,
-            json={
-                "name": "test_problem_mock",
-                "status": "optimal",
-                "objective_value": 1.0,
-                "variables": {"x": 1.0, "y": 0.0}
-            }
+            text=f"LOG: some log\nRESULT: {json.dumps(solution)}"
         )
 
     # 3. Initialize the solver with the mock transport
-    async with MipApiSolver(transport=httpx.MockTransport(mock_transport)) as solver:
+    async with ReMIPSolver(transport=httpx.MockTransport(mock_transport)) as solver:
         # 4. Solve the problem
         status = await solver.solve(prob)
 
     # 5. Check the results
-    assert status == 1 # LpStatusOptimal
-    assert prob.status == 1 # LpStatusOptimal
+    assert status == constants.LpStatusOptimal
+    assert prob.status == constants.LpStatusOptimal
     assert x.varValue == 1.0
     assert y.varValue == 0.0
 
@@ -53,23 +56,24 @@ async def test_client_actual_solve():
 
     # 2. Create a mock transport
     def mock_transport(request: httpx.Request) -> httpx.Response:
+        solution = {
+            "name": "test_problem_mock",
+            "status": "optimal",
+            "objective_value": 1.0,
+            "variables": {"x": 1.0, "y": 0.0}
+        }
         return httpx.Response(
             200,
-            json={
-                "name": "test_problem_mock",
-                "status": "optimal",
-                "objective_value": 1.0,
-                "variables": {"x": 1.0, "y": 0.0}
-            }
+            text=f"LOG: some log\nRESULT: {json.dumps(solution)}"
         )
 
     # 3. Initialize the solver with the mock transport
-    async with MipApiSolver(transport=httpx.MockTransport(mock_transport)) as solver:
+    async with ReMIPSolver(transport=httpx.MockTransport(mock_transport)) as solver:
         # 4. Solve the problem
         status = await solver.solve(prob)
 
     # 5. Check the results
-    assert status == 1 # LpStatusOptimal
-    assert prob.status == 1 # LpStatusOptimal
+    assert status == constants.LpStatusOptimal
+    assert prob.status == constants.LpStatusOptimal
     assert x.varValue == 1.0
     assert y.varValue == 0.0

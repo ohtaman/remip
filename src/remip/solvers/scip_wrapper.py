@@ -23,6 +23,7 @@ class ScipSolverWrapper:
     async def solve_and_stream_logs(self, problem: MIPProblem) -> AsyncGenerator[str, None]:
         """
         Solves a MIP problem and streams the logs.
+        Yields log lines prefixed with 'LOG: ' and the final solution prefixed with 'RESULT: '.
         """
         log_queue = asyncio.Queue()
         stop_event = threading.Event()
@@ -43,11 +44,14 @@ class ScipSolverWrapper:
         while not stop_event.is_set() or not log_queue.empty():
             try:
                 log_line = await asyncio.wait_for(log_queue.get(), timeout=0.1)
-                yield log_line
+                yield f"LOG: {log_line}"
             except asyncio.TimeoutError:
                 pass
-        
+
         solver_thread.join()
+
+        solution = self._extract_solution(model, problem, vars)
+        yield f"RESULT: {solution.model_dump_json()}"
 
     async def _build_model(self, problem: MIPProblem):
         model = Model(problem.parameters.name)
