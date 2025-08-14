@@ -21,15 +21,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install server dependencies
-        run: uv sync --group dev
+        run: uv pip install -e .[dev]
 
       - name: Run server tests
-        run: uv run pytest tests
+        run: uv run pytest
 
       - name: Install client dependencies
-        working-directory: ./remip-client
-        run: uv sync --group dev
+        run: uv pip install -e ./remip-client[dev]
 
       - name: Run client tests
-        working-directory: ./remip-client
-        run: uv run pytest tests
+        run: uv run pytest remip-client/tests
