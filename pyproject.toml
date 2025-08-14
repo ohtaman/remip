@@ -1,6 +1,6 @@
 [project]
 name = "remip"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -18,12 +18,18 @@ dependencies = [
 remip = "remip.main:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.ruff]
 line-length = 128
 select = ["E", "F", "I"]
+
+[tool.hatch.workspaces]
+packages = ["./remip-client"]
 
 [project.optional-dependencies]
 dev = [
