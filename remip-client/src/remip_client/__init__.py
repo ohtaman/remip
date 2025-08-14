@@ -9,6 +9,7 @@ if "pyodide" in sys.modules:
     class DummyContext:
         def __setattr__(self, name, value):
             pass
+
         def __getattr__(self, name):
             return lambda *args, **kwargs: None
 
@@ -22,4 +23,4 @@ if "pyodide" in sys.modules:
             self.PROTOCOL_TLS_CLIENT = "dummy_protocol"
             self.CERT_NONE = "dummy_cert_none"
 
-    sys.modules['ssl'] = FakeSSL('ssl')
+    sys.modules["ssl"] = FakeSSL("ssl")

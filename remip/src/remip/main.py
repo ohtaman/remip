@@ -1,4 +1,3 @@
-
 import argparse
 import socket
 
@@ -20,8 +19,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 def get_solver_service():
     return MIPSolverService()
+
 
 @app.post("/solve", response_model=MIPSolution)
 async def solve(problem: MIPProblem, service: MIPSolverService = Depends(get_solver_service)):
@@ -30,6 +31,7 @@ async def solve(problem: MIPProblem, service: MIPSolverService = Depends(get_sol
     """
     return await service.solve_problem(problem)
 
+
 @app.post("/solve-stream")
 async def solve_stream(problem: MIPProblem, service: MIPSolverService = Depends(get_solver_service)):
     """
@@ -37,15 +39,13 @@ async def solve_stream(problem: MIPProblem, service: MIPSolverService = Depends(
     """
     return StreamingResponse(service.solve_problem_stream(problem), media_type="text/plain")
 
+
 @app.get("/solver-info")
 async def solver_info():
     """
     Returns information about the solver.
     """
     return {"solver": "SCIP", "version": "x.y.z"}
-
-
-
 
 
 def main():
@@ -67,6 +67,7 @@ def main():
             port = s.getsockname()[1]
 
     uvicorn.run(app, host="0.0.0.0", port=port)
+
 
 if __name__ == "__main__":
     main()

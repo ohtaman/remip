@@ -23,9 +23,16 @@ build-backend = "hatchling.build"
 
 [tool.hatch.version]
 source = "vcs"
+fallback-version = "0.1.0"
+
+# setuptools-scm を親ディレクトリの .git を基準に動かす
+[tool.setuptools_scm]
+root = ".."
 
 [tool.ruff]
 line-length = 128
+
+[tool.ruff.lint]
 select = ["E", "F", "I"]
 
 [tool.hatch.workspaces]
@@ -38,4 +45,5 @@ dev = [
     "pytest>=8.4.1",
     "pytest-asyncio>=1.1.0",
     "ruff>=0.12.8",
+    "pre-commit>=3.7.0",
 ]

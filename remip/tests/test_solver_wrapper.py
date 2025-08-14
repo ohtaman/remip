@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from remip.models import MIPProblem, Objective, ObjectiveCoefficient, Parameters, Variable
 from remip.solvers.scip_wrapper import ScipSolverWrapper
 
@@ -10,16 +9,18 @@ from remip.solvers.scip_wrapper import ScipSolverWrapper
 def solver_wrapper():
     return ScipSolverWrapper()
 
+
 @pytest.fixture
 def sample_problem():
     return MIPProblem(
         parameters=Parameters(name="test_problem", sense=1, status=0, sol_status=0),
         objective=Objective(name="obj", coefficients=[ObjectiveCoefficient(name="x", value=1.0)]),
         constraints=[],
-        variables=[Variable(name="x", lowBound=0, upBound=1, cat="Continuous")]
+        variables=[Variable(name="x", lowBound=0, upBound=1, cat="Continuous")],
     )
 
-@patch('remip.solvers.scip_wrapper.Model')
+
+@patch("remip.solvers.scip_wrapper.Model")
 @pytest.mark.asyncio
 async def test_solve(MockModel, solver_wrapper, sample_problem):
     # Arrange
@@ -46,12 +47,15 @@ async def test_solve(MockModel, solver_wrapper, sample_problem):
     assert solution.variables["x"] == 1.0
     mock_model_instance.optimize.assert_called_once()
 
-@patch('remip.solvers.scip_wrapper.Model')
+
+@patch("remip.solvers.scip_wrapper.Model")
 @pytest.mark.asyncio
 async def test_solve_and_stream_logs_sets_message_handler(MockModel, solver_wrapper, sample_problem):
     # Arrange
     mock_model_instance = MagicMock()
     MockModel.return_value = mock_model_instance
+    mock_model_instance.getNSols.return_value = 0  # Avoid TypeError
+    mock_model_instance.getStatus.return_value = "not solved"  # Avoid ValidationError
 
     # Act
     # We need to consume the generator to execute the code
