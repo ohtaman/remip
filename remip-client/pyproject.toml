@@ -13,6 +13,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pyodide = ["pyodide-http"]
+[dependency-groups]
 dev = [
     "pytest",
     "pytest-asyncio",
