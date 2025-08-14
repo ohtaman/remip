@@ -13,10 +13,10 @@ async def test_client_async_solve():
     """
     # 1. Define a problem
     prob = LpProblem("test_problem_mock", LpMaximize)
-    x = LpVariable("x", 0, 1, cat='Binary')
-    y = LpVariable("y", 0, 1, cat='Binary')
+    x = LpVariable("x", 0, 1, cat="Binary")
+    y = LpVariable("y", 0, 1, cat="Binary")
     prob += x + y, "objective"
-    prob += 2*x + y <= 2, "constraint1"
+    prob += 2 * x + y <= 2, "constraint1"
 
     # 2. Create a mock transport
     def mock_transport(request: httpx.Request) -> httpx.Response:
@@ -24,11 +24,10 @@ async def test_client_async_solve():
             "name": "test_problem_mock",
             "status": "optimal",
             "objective_value": 1.0,
-            "variables": {"x": 1.0, "y": 0.0}
+            "variables": {"x": 1.0, "y": 0.0},
         }
         return httpx.Response(
-            200,
-            text=f"LOG: some log\nRESULT: {json.dumps(solution)}"
+            200, text=f"LOG: some log\nRESULT: {json.dumps(solution)}"
         )
 
     # 3. Initialize the solver with the mock transport
@@ -42,6 +41,7 @@ async def test_client_async_solve():
     assert x.varValue == 1.0
     assert y.varValue == 0.0
 
+
 @pytest.mark.asyncio
 async def test_client_actual_solve():
     """
@@ -49,10 +49,10 @@ async def test_client_actual_solve():
     """
     # 1. Define a problem
     prob = LpProblem("test_problem_mock", LpMaximize)
-    x = LpVariable("x", 0, 1, cat='Binary')
-    y = LpVariable("y", 0, 1, cat='Binary')
+    x = LpVariable("x", 0, 1, cat="Binary")
+    y = LpVariable("y", 0, 1, cat="Binary")
     prob += x + y, "objective"
-    prob += 2*x + y <= 2, "constraint1"
+    prob += 2 * x + y <= 2, "constraint1"
 
     # 2. Create a mock transport
     def mock_transport(request: httpx.Request) -> httpx.Response:
@@ -60,11 +60,10 @@ async def test_client_actual_solve():
             "name": "test_problem_mock",
             "status": "optimal",
             "objective_value": 1.0,
-            "variables": {"x": 1.0, "y": 0.0}
+            "variables": {"x": 1.0, "y": 0.0},
         }
         return httpx.Response(
-            200,
-            text=f"LOG: some log\nRESULT: {json.dumps(solution)}"
+            200, text=f"LOG: some log\nRESULT: {json.dumps(solution)}"
         )
 
     # 3. Initialize the solver with the mock transport

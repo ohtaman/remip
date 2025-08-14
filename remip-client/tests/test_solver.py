@@ -22,11 +22,10 @@ async def test_solve_optimal(lp_problem):
         solution = {
             "status": "optimal",
             "objective_value": 1.0,
-            "variables": {"x": 1.0}
+            "variables": {"x": 1.0},
         }
         return httpx.Response(
-            200,
-            text=f'LOG: some log\nRESULT: {json.dumps(solution)}'
+            200, text=f"LOG: some log\nRESULT: {json.dumps(solution)}"
         )
 
     async with ReMIPSolver(transport=httpx.MockTransport(mock_transport)) as solver:
@@ -41,8 +40,7 @@ async def test_solve_infeasible(lp_problem):
     def mock_transport(request: httpx.Request) -> httpx.Response:
         solution = {"status": "infeasible"}
         return httpx.Response(
-            200,
-            text=f'LOG: some log\nRESULT: {json.dumps(solution)}'
+            200, text=f"LOG: some log\nRESULT: {json.dumps(solution)}"
         )
 
     async with ReMIPSolver(transport=httpx.MockTransport(mock_transport)) as solver:

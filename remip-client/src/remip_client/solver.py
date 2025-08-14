@@ -46,6 +46,7 @@ class ReMIPSolver(LpSolver):
             # Running loop (Jupyter) → allow nested run
             try:
                 import nest_asyncio
+
                 nest_asyncio.apply(loop)
             except Exception:
                 pass  # if not available, fall back to thread strategy or raise

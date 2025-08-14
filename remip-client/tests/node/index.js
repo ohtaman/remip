@@ -4,7 +4,7 @@ const path = require("path");
 async function main() {
     console.log("--- Loading Pyodide for Node.js ---");
     const pyodide = await loadPyodide();
-    
+
     console.log("--- Loading micropip ---");
     await pyodide.loadPackage("micropip");
     const micropip = pyodide.pyimport("micropip");

@@ -61,7 +61,7 @@ class ScipSolverWrapper:
                 name=var_data.name,
                 lb=var_data.lowBound,
                 ub=var_data.upBound,
-                vtype="C" if var_data.cat == "Continuous" else "I"
+                vtype="C" if var_data.cat == "Continuous" else "I",
             )
         for const_data in problem.constraints:
             coeffs = {c.name: c.value for c in const_data.coefficients}
@@ -69,11 +69,11 @@ class ScipSolverWrapper:
             rhs = -const_data.constant if const_data.constant is not None else 0.0
 
             expr = sum(coeffs[name] * var for name, var in vars.items() if name in coeffs)
-            if sense == 0: # EQ
+            if sense == 0:  # EQ
                 model.addCons(expr == rhs)
-            elif sense == -1: # LEQ
+            elif sense == -1:  # LEQ
                 model.addCons(expr <= rhs)
-            else: # GEQ
+            else:  # GEQ
                 model.addCons(expr >= rhs)
 
         obj_coeffs = {c.name: c.value for c in problem.objective.coefficients}
@@ -91,8 +91,5 @@ class ScipSolverWrapper:
             for var_name, var in vars.items():
                 solution_vars[var_name] = solution[var]
         return MIPSolution(
-            name=problem.parameters.name,
-            status=status,
-            objective_value=objective_value,
-            variables=solution_vars
+            name=problem.parameters.name, status=status, objective_value=objective_value, variables=solution_vars
         )
