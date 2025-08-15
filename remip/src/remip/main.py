@@ -1,13 +1,17 @@
 import argparse
+import logging
 import socket
 
 import uvicorn
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from .models import MIPProblem, MIPSolution
+from .models import MIPProblem
 from .services import MIPSolverService
+
+logger = logging.getLogger(__name__)
+
 
 app = FastAPI()
 
@@ -24,20 +28,29 @@ def get_solver_service():
     return MIPSolverService()
 
 
-@app.post("/solve", response_model=MIPSolution)
-async def solve(problem: MIPProblem, service: MIPSolverService = Depends(get_solver_service)):
+@app.post("/solve")
+async def solve(request: Request, problem: MIPProblem, service: MIPSolverService = Depends(get_solver_service)):
     """
     Solves a MIP problem and returns the solution.
+    If the 'stream' query parameter is set to 'sse' or the 'Accept' header is 'text/event-stream',
+    it streams solver events using Server-Sent Events (SSE).
     """
-    return await service.solve_problem(problem)
+    stream_param = request.query_params.get("stream", "").lower()
+    accept_header = request.headers.get("accept", "").lower()
 
+    is_streaming_request = "sse" in stream_param or "text/event-stream" in accept_header
 
-@app.post("/solve-stream")
-async def solve_stream(problem: MIPProblem, service: MIPSolverService = Depends(get_solver_service)):
-    """
-    Solves a MIP problem and streams the solver logs.
-    """
-    return StreamingResponse(service.solve_problem_stream(problem), media_type="text/plain")
+    if is_streaming_request:
+
+        async def event_generator():
+            async for event in service.solve_stream(problem):
+                yield f"event: {event.type}\n"
+                yield f"data: {event.model_dump_json()}\n\n"
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
+    else:
+        solution = await service.solve(problem)
+        return solution
 
 
 @app.get("/solver-info")
@@ -52,21 +65,27 @@ def main():
     """
     Runs the FastAPI application using uvicorn.
     """
+    logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--port", type=int, default=0)
+    parser.add_argument("--host", default="localhost")
     args = parser.parse_args()
 
     try:
+        port = args.port or 8000  # Default port
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(("0.0.0.0", args.port))
-        port = args.port
+            s.bind((args.host, port))
     except OSError:
-        print(f"Port {args.port} is already in use, finding an available port.")
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(("0.0.0.0", 0))
-            port = s.getsockname()[1]
+        if args.port:  # When port argument is specified.
+            logger.error(f"The specified port {port} is already in use. Aborting server startup.")
+            exit(-1)
+        else:
+            logger.info(f"Default port {port} is already in use, finding an available port.")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind((args.host, 0))
+                port = s.getsockname()[1]
 
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host=args.host, port=port)
 
 
 if __name__ == "__main__":

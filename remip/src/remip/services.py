@@ -1,6 +1,6 @@
 from typing import AsyncGenerator
 
-from .models import MIPProblem, MIPSolution
+from .models import MIPProblem, MIPSolution, SolverEvent
 from .solvers.scip_wrapper import ScipSolverWrapper
 
 
@@ -12,15 +12,15 @@ class MIPSolverService:
     def __init__(self):
         self.solver = ScipSolverWrapper()
 
-    async def solve_problem(self, problem_data: MIPProblem) -> MIPSolution:
+    async def solve(self, problem_data: MIPProblem) -> MIPSolution:
         """
         Solves the problem and returns the final result.
         """
         return await self.solver.solve(problem_data)
 
-    async def solve_problem_stream(self, problem_data: MIPProblem) -> AsyncGenerator[str, None]:
+    async def solve_stream(self, problem_data: MIPProblem) -> AsyncGenerator[SolverEvent, None]:
         """
-        Solves the problem and yields log lines.
+        Solves the problem and yields solver events.
         """
-        async for log_line in self.solver.solve_and_stream_logs(problem_data):
-            yield log_line
+        async for event in self.solver.solve_and_stream_events(problem_data):
+            yield event
