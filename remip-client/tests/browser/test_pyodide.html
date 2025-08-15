@@ -9,11 +9,11 @@
         await pyodide.loadPackage("micropip");
         const micropip = pyodide.pyimport("micropip");
         await micropip.install(["pulp", "pyodide-http"]);
-        await micropip.install('./dist/remip_client-0.1.0-py3-none-any.whl');
+        await micropip.install('../../dist/remip_client-0.1.0-py3-none-any.whl');
 
         const pythonCode = `
 from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpStatus
-from remip_client.solver import MipApiSolver
+from remip_client.solver import ReMIPSolver
 
 try:
     print("--- Defining problem ---")
@@ -25,10 +25,10 @@ try:
     print("--- Problem defined ---")
 
     print("--- Initializing solver ---")
-    async with MipApiSolver(base_url="http://localhost:8000") as solver:
-        print("--- Solver initialized. Calling solver.solve() ---")
-        await solver.solve(prob)
-        print("--- solver.solve() finished ---")
+    solver = ReMIPSolver(base_url="http://localhost:8000")
+    print("--- Solver initialized. Calling solver.solve() ---")
+    status = prob.solve(solver=solver)
+    print("--- solver.solve() finished ---")
 
     print("--- Printing results ---")
     print(f"Status: {LpStatus[prob.status]}")

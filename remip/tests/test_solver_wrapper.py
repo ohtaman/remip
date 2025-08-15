@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from remip.models import MIPProblem, Objective, ObjectiveCoefficient, Parameters, Variable
 from remip.solvers.scip_wrapper import ScipSolverWrapper
 
@@ -50,7 +51,7 @@ async def test_solve(MockModel, solver_wrapper, sample_problem):
 
 @patch("remip.solvers.scip_wrapper.Model")
 @pytest.mark.asyncio
-async def test_solve_and_stream_events_sets_message_handler(MockModel, solver_wrapper, sample_problem):
+async def test_solve_and_stream_events_optimizes_model(MockModel, solver_wrapper, sample_problem):
     # Arrange
     mock_model_instance = MagicMock()
     MockModel.return_value = mock_model_instance
@@ -63,4 +64,5 @@ async def test_solve_and_stream_events_sets_message_handler(MockModel, solver_wr
         pass
 
     # Assert
-    mock_model_instance.setMessagehdlr.assert_called_once()
+    # 新しい実装ではsetMessagehdlrの代わりにoptimizeが呼ばれる
+    mock_model_instance.optimize.assert_called_once()
