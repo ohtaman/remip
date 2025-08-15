@@ -1,7 +1,15 @@
 import json
+import logging
 
 import requests
 from pulp import LpProblem, LpSolver, constants
+
+
+logger = logging.getLogger(__name__)
+
+
+def get_logging_level(level_label: str):
+    return int(getattr(logging, level_label.upper()))
 
 
 class ReMIPSolver(LpSolver):
@@ -58,7 +66,6 @@ class ReMIPSolver(LpSolver):
                         if current_event is None:
                             continue
                         data = json.loads(line[6:])  # Remove "data: " prefix
-                        print("---- >> data row <<--", current_event)
                         match current_event:
                             case "result":
                                 # Handle both cases: data contains solution directly or nested in solution field
@@ -67,28 +74,30 @@ class ReMIPSolver(LpSolver):
                                 else:
                                     solution = data
                             case "log":
-                                print(
-                                    f"[{data.get('timestamp')}] [{data.get('level')}] {data.get('message')}"
+                                logger.log(
+                                    get_logging_level(data.get("level", "info")),
+                                    f"[{data.get('timestamp')}] {data.get('message')}",
                                 )
                             case "metric":
-                                print(
+                                logger.info(
+                                    get_logging_level(data.get("level", "info")),
                                     f"[{data.get('timestamp')}] Iter: {data.get('iteration')}, "
-                                    f"Obj: {data.get('objective_value')}, Gap: {data.get('gap')}"
+                                    f"Obj: {data.get('objective_value')}, Gap: {data.get('gap')}",
                                 )
                             case _:
-                                # ignore unknown event
+                                # Ignore unknown event
                                 continue
         except requests.exceptions.RequestException as e:
-            print(f"Could not connect to API: {e}")
+            logger.warning(f"Could not connect to API: {e}")
             lp.status = constants.LpStatusNotSolved
             return lp.status
         except Exception as e:
-            print(f"An unexpected error occurred: {e}")
+            logger.warning(f"An unexpected error occurred: {e}")
             lp.status = constants.LpStatusNotSolved
             return lp.status
 
         if solution is None:
-            print("Error: Did not receive solution from server.")
+            logger.warning("Did not receive solution from server.")
             lp.status = constants.LpStatusNotSolved
             return lp.status
 
