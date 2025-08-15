@@ -25,7 +25,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 fallback-version = "0.1.0"
 
-# setuptools-scm を親ディレクトリの .git を基準に動かす
+# setuptools-scm to use parent directory's .git as reference
 [tool.setuptools_scm]
 root = ".."
 

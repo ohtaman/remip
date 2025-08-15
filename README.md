@@ -50,7 +50,6 @@ Both packages follow the standard `src` layout for clean and maintainable code.
 
 ### Prerequisites
 
--   **SCIP Optimization Suite**: This project uses `pyscipopt`, which requires a working installation of the SCIP Optimization Suite. You can download it from the [official SCIP website](https://scipopt.org/index.php#download). Please follow their installation instructions.
 -   Python 3.11+
 -   [uv](https://github.com/astral-sh/uv): A fast Python package installer.
 -   [Docker](https://www.docker.com/): For running the application in a container.

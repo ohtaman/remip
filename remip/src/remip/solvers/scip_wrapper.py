@@ -92,12 +92,12 @@ class ScipSolverWrapper:
     def _run_solver_in_thread(self, model: Model, log_queue: asyncio.Queue, stop_event: threading.Event):
         """Target function for the solver thread."""
 
-        # PySCIPOptの最新バージョンではsetMessagehdlrが利用できないため、
-        # 代わりに標準出力をキャプチャしてログを取得する
+        # In the latest version of PySCIPOpt, setMessagehdlr is not available,
+        # so we capture standard output to get logs instead
         import sys
         from io import StringIO
 
-        # 標準出力をキャプチャ
+        # Capture standard output
         old_stdout = sys.stdout
         captured_output = StringIO()
         sys.stdout = captured_output
@@ -105,11 +105,11 @@ class ScipSolverWrapper:
         try:
             model.optimize()
         finally:
-            # 標準出力を復元
+            # Restore standard output
             sys.stdout = old_stdout
             captured_output.seek(0)
 
-            # キャプチャされた出力をログキューに送信
+            # Send captured output to log queue
             for line in captured_output:
                 if line.strip():
                     asyncio.run_coroutine_threadsafe(log_queue.put(line.strip()), asyncio.get_running_loop())
