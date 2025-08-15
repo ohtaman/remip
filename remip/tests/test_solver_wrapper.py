@@ -64,5 +64,5 @@ async def test_solve_and_stream_events_optimizes_model(MockModel, solver_wrapper
         pass
 
     # Assert
-    # 新しい実装ではsetMessagehdlrの代わりにoptimizeが呼ばれる
+    # In the new implementation, optimize is called instead of setMessagehdlr
     mock_model_instance.optimize.assert_called_once()
