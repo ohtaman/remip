@@ -10,35 +10,35 @@ repos:
     hooks:
       - id: ruff
         name: ruff
-        entry: cd remip && uv run ruff check --fix
+        entry: bash -c 'cd remip && uv run ruff check --fix'
         language: system
         types: [python]
         args: ["--show-fixes"]
       - id: ruff-format
         name: ruff-format
-        entry: cd remip && uv run ruff format
+        entry: bash -c 'cd remip && uv run ruff format'
         language: system
         types: [python]
       - id: pytest
         name: pytest
-        entry: cd remip && uv run pytest
+        entry: bash -c 'cd remip && uv run pytest'
         language: system
         types: [python]
         pass_filenames: false
       - id: ruff-client
         name: ruff-client
-        entry: cd remip-client && uv run ruff check --fix
+        entry: bash -c 'cd remip-client && uv run ruff check --fix'
         language: system
         types: [python]
         args: ["--show-fixes"]
       - id: ruff-format-client
         name: ruff-format-client
-        entry: cd remip-client && uv run ruff format
+        entry: bash -c 'cd remip-client && uv run ruff format'
         language: system
         types: [python]
       - id: pytest-client
         name: pytest-client
-        entry: cd remip-client && uv run pytest
+        entry: bash -c 'cd remip-client && uv run pytest'
         language: system
         types: [python]
         pass_filenames: false
