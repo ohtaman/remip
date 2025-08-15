@@ -85,10 +85,10 @@ Both packages follow the standard `src` layout for clean and maintainable code.
 
 ### Running the API
 
-To run the API server locally with hot-reloading:
+To run the API server locally:
 
 ```bash
-uvicorn remip.main:app --reload
+uv run remip
 ```
 
 The API will be available at `http://localhost:8000`.
@@ -99,27 +99,18 @@ The API will be available at `http://localhost:8000`.
 
 ### API Endpoints
 
--   `POST /solve`: Submits a MIP problem and returns the final solution.
--   `POST /solve-stream`: Submits a MIP problem and streams the solver logs.
+-   `POST /solve`: Submits a MIP problem. Returns the final solution as JSON. If the `stream=sse` query parameter is provided or the `Accept` header is `text/event-stream`, it streams solver events using Server-Sent Events (SSE).
 -   `GET /solver-info`: Returns information about the configured solver.
 
 ### Python Client
 
 The `remip-client` library provides a PuLP-compatible solver interface.
 
-### Pyodide Support
-
-The client can be used in a Pyodide environment to solve MIP problems in the browser. To use the client in a Pyodide environment, install it with the `pyodide` extra:
-
-```bash
-micropip.install("remip-client[pyodide]")
-```
-
 **Example:**
 
 ```python
-from pulp import LpProblem, LpVariable, lpSum, LpMaximize
-from remip_client.solver import MipApiSolver
+from pulp import LpProblem, LpVariable, LpMaximize, LpStatus
+from remip_client.solver import ReMIPSolver
 
 # 1. Define a problem
 prob = LpProblem("test_problem", LpMaximize)
@@ -128,107 +119,34 @@ y = LpVariable("y", 0, 1, cat='Binary')
 prob += x + y, "objective"
 prob += 2*x + y <= 2, "constraint1"
 
-# 2. Initialize the remote solver
-with MipApiSolver(base_url="http://localhost:8000") as solver:
-    # 3. Solve the problem via the API
-    prob.solve(solver)
+# 2. Initialize the remote solver for a non-streaming request
+solver = ReMIPSolver(stream=False)
 
-from pulp import LpProblem, LpVariable, lpSum, LpMaximize, LpStatus
-
-# 1. Define a problem
-prob = LpProblem("test_problem", LpMaximize)
-x = LpVariable("x", 0, 1, cat='Binary')
-y = LpVariable("y", 0, 1, cat='Binary')
-prob += x + y, "objective"
-prob += 2*x + y <= 2, "constraint1"
-
-# 2. Initialize the remote solver
-with MipApiSolver(base_url="http://localhost:8000") as solver:
-    # 3. Solve the problem via the API
-    prob.solve(solver)
+# 3. Solve the problem
+prob.solve(solver)
 
 # 4. Print the results
 print(f"Status: {LpStatus[prob.status]}")
 for v in prob.variables():
     print(f"{v.name} = {v.varValue}")
+
+# 5. To get a stream of solver events, set stream=True
+streaming_solver = ReMIPSolver(stream=True)
+
+# The client will print log and metric events to the console
+prob.solve(streaming_solver)
+
 ```
 
 ---
 
 ## Testing
 
-### Automated Test Suite
-
-The project includes a full suite of automated tests for both the server and the CPython client.
-
-To run the full test suite:
+To run the full test suite for both the server and the client:
 
 ```bash
 uv run pytest
 ```
-
-### Manual Browser Test
-
-The `remip-client` includes an integration test that runs in the browser using Pyodide. This test solves a small MIP problem by communicating with the live server from a web page.
-
-To run the browser test:
-
-1.  **Start the API Server:** Make sure the ReMIP server is running.
-    ```bash
-    uvicorn src.remip.main:app --host 0.0.0.0 --port 8000
-    ```
-
-2.  **Build the Client Wheel:** The test page needs the `remip-client` package built as a wheel file.
-    ```bash
-    # From the project root directory
-    cd remip-client
-    python -m build --wheel
-    cd ..
-    ```
-
-3.  **Access the Test Page:** The main server also hosts the client files. Open your web browser and navigate to:
-    [http://localhost:8000/test_pyodide.html](http://localhost:8000/test_pyodide.html)
-
-4.  **Check the Console:** Open your browser's developer console. You should see the output of the test, including the final solution and a "Test assertions passed" message.
-
-### Node.js (Pyodide) Test
-
-This project also includes a test to verify that the `remip-client` works in a Node.js environment using Pyodide.
-
-**Setup:**
-
-1.  Navigate to the test directory:
-    ```bash
-    cd remip-client/tests/node
-    ```
-2.  Install the Node.js dependencies:
-    ```bash
-    npm install
-    ```
-
-**Running the Test:**
-
-1.  **Start the API Server:** Make sure the ReMIP server is running in another terminal.
-    ```bash
-    # From the project root
-    uvicorn src.remip.main:app --host 0.0.0.0 --port 8000
-    ```
-
-2.  **Build the Client Wheel:** The test needs the `remip-client` package built as a wheel file.
-    ```bash
-    # From the project root
-    cd remip-client
-    python -m build --wheel
-    cd ..
-    ```
-
-3.  **Run the Node.js Test:** Execute the test script using the following command from the project root. The `--experimental-wasm-stack-switching` flag is required by Pyodide.
-    ```bash
-    # From the project root
-    node --experimental-wasm-stack-switching remip-client/tests/node/index.js
-    ```
-
-4.  You should see "--- Node.js Test Succeeded! --- " if the test passes.
 
 ---
 
