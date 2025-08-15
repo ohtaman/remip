@@ -16,7 +16,7 @@ def sample_problem():
         parameters=Parameters(name="test_problem", sense=1, status=0, sol_status=0),
         objective=Objective(name="obj", coefficients=[ObjectiveCoefficient(name="x", value=1.0)]),
         constraints=[],
-        variables=[Variable(name="x", lowBound=0, upBound=1, cat="Continuous")],
+        variables=[Variable(name="x", lower_bound=0, upper_bound=1, category="Continuous")],
     )
 
 
@@ -50,7 +50,7 @@ async def test_solve(MockModel, solver_wrapper, sample_problem):
 
 @patch("remip.solvers.scip_wrapper.Model")
 @pytest.mark.asyncio
-async def test_solve_and_stream_logs_sets_message_handler(MockModel, solver_wrapper, sample_problem):
+async def test_solve_and_stream_events_sets_message_handler(MockModel, solver_wrapper, sample_problem):
     # Arrange
     mock_model_instance = MagicMock()
     MockModel.return_value = mock_model_instance
@@ -59,7 +59,7 @@ async def test_solve_and_stream_logs_sets_message_handler(MockModel, solver_wrap
 
     # Act
     # We need to consume the generator to execute the code
-    async for _ in solver_wrapper.solve_and_stream_logs(sample_problem):
+    async for _ in solver_wrapper.solve_and_stream_events(sample_problem):
         pass
 
     # Assert

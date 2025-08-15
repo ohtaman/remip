@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Parameters(BaseModel):
@@ -21,12 +21,14 @@ class Objective(BaseModel):
 
 
 class Variable(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
-    cat: str
-    lowBound: Optional[float] = None
-    upBound: Optional[float] = None
-    varValue: Optional[float] = None
-    dj: Optional[float] = None
+    category: str = Field(..., alias="cat")
+    lower_bound: Optional[float] = Field(None, alias="lowBound")
+    upper_bound: Optional[float] = Field(None, alias="upBound")
+    value: Optional[float] = Field(None, alias="varValue")
+    reduced_cost: Optional[float] = Field(None, alias="dj")
 
 
 class Constraint(BaseModel):
@@ -56,3 +58,38 @@ class MIPSolution(BaseModel):
     status: str
     objective_value: Optional[float]
     variables: Dict[str, float]
+
+
+# SSE Event Models
+class LogEvent(BaseModel):
+    type: Literal["log"] = "log"
+    timestamp: str
+    level: str
+    stage: str
+    message: str
+    sequence: int
+
+
+class MetricEvent(BaseModel):
+    type: Literal["metric"] = "metric"
+    timestamp: str
+    objective_value: float
+    gap: float
+    iteration: int
+    sequence: int
+
+
+class ResultEvent(BaseModel):
+    type: Literal["result"] = "result"
+    timestamp: str
+    solution: MIPSolution
+    runtime_milliseconds: int
+    sequence: int
+
+
+class EndEvent(BaseModel):
+    type: Literal["end"] = "end"
+    success: bool
+
+
+SolverEvent = Union[LogEvent, MetricEvent, ResultEvent, EndEvent]

@@ -151,13 +151,25 @@ graph TD
 
 - **`POST /solve`**
   - **Request Body**: `application/json` - `MIPProblem`
-  - **Success Response**: `200 OK` - `MIPSolution`
-  - **Error Response**: `400 Bad Request`, `422 Unprocessable Entity`, `500 Internal Server Error`
+  - **Query Parameter**: `stream=sse` (optional; if specified, enables streaming response)
+  - **Automatic detection via Accept header**: If `Accept: text/event-stream` is set, a streaming response is also returned
+  - **Success Response**:
+    - Standard: `200 OK` - `MIPSolution` (JSON)
+    - Streaming: `200 OK` - `text/event-stream`. The stream consists of multiple events:
+      ```
+      event: log
+      data: {"ts":"...","level":"info","stage":"presolve","msg":"reading model","seq":1}
 
-- **`GET /solve-stream`**
-  - **Request Body**: `application/json` - `MIPProblem` (sent as a JSON string in a query parameter or custom header)
-  - **Success Response**: `200 OK` - `text/event-stream`
-  - **Error Response**: `400 Bad Request`, `500 Internal Server Error`
+      event: metric
+      data: {"ts":"...","obj":160.2,"gap":0.23,"iter":34,"seq":2}
+
+      event: result
+      data: {"ts":"...","status":"optimal","obj":158.0,"variables":{"x1":1,"x2":0},"runtime_ms":8976,"seq":3}
+
+      event: end
+      data: {"ok":true}
+      ```
+  - **Error Response**: `400 Bad Request`, `422 Unprocessable Entity`, `500 Internal Server Error`
 
 - **`GET /solver-info`**
   - **Request Body**: None
