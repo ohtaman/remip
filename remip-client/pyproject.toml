@@ -8,15 +8,13 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "pulp",
-    "httpx",
+    "requests",
 ]
 
-[project.optional-dependencies]
-pyodide = ["pyodide-http"]
 [dependency-groups]
 dev = [
     "pytest",
-    "pytest-asyncio",
+    "requests-mock",
 ]
 
 [build-system]

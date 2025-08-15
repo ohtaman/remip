@@ -3,6 +3,7 @@ from typing import AsyncGenerator
 
 import pytest
 from fastapi.testclient import TestClient
+
 from remip.main import app, get_solver_service
 from remip.models import (
     EndEvent,

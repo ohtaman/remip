@@ -92,13 +92,28 @@ class ScipSolverWrapper:
     def _run_solver_in_thread(self, model: Model, log_queue: asyncio.Queue, stop_event: threading.Event):
         """Target function for the solver thread."""
 
-        # Define a message handler to push logs to the queue
-        def message_hdlr(msg):
-            # This runs in a different thread, so we need to use run_coroutine_threadsafe
-            asyncio.run_coroutine_threadsafe(log_queue.put(msg), asyncio.get_running_loop())
+        # PySCIPOptの最新バージョンではsetMessagehdlrが利用できないため、
+        # 代わりに標準出力をキャプチャしてログを取得する
+        import sys
+        from io import StringIO
 
-        model.setMessagehdlr(message_hdlr, quiet=False)
-        model.optimize()
+        # 標準出力をキャプチャ
+        old_stdout = sys.stdout
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        try:
+            model.optimize()
+        finally:
+            # 標準出力を復元
+            sys.stdout = old_stdout
+            captured_output.seek(0)
+
+            # キャプチャされた出力をログキューに送信
+            for line in captured_output:
+                if line.strip():
+                    asyncio.run_coroutine_threadsafe(log_queue.put(line.strip()), asyncio.get_running_loop())
+
         stop_event.set()
 
     def _parse_log_line(self, line: str) -> Optional[SolverEvent]:
