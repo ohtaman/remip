@@ -79,7 +79,7 @@ class ReMIPSolver(LpSolver):
                                     f"[{data.get('timestamp')}] {data.get('message')}",
                                 )
                             case "metric":
-                                logger.info(
+                                logger.log(
                                     get_logging_level(data.get("level", "info")),
                                     f"[{data.get('timestamp')}] Iter: {data.get('iteration')}, "
                                     f"Obj: {data.get('objective_value')}, Gap: {data.get('gap')}",
