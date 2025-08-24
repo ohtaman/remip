@@ -66,3 +66,78 @@ async def test_solve_and_stream_events_optimizes_model(MockModel, solver_wrapper
     # Assert
     # In the new implementation, optimize is called instead of setMessagehdlr
     mock_model_instance.optimize.assert_called_once()
+
+
+@patch("remip.solvers.scip_wrapper.Model")
+@pytest.mark.asyncio
+async def test_build_model_with_sos1(MockModel, solver_wrapper):
+    # Arrange
+    mock_model_instance = MagicMock()
+    MockModel.return_value = mock_model_instance
+
+    # Mock variables
+    mock_x_A = MagicMock()
+    mock_x_A.name = "x_A"
+    mock_x_B = MagicMock()
+    mock_x_B.name = "x_B"
+    mock_x_C = MagicMock()
+    mock_x_C.name = "x_C"
+
+    def addVar_side_effect(name, **kwargs):
+        if name == "x_A":
+            return mock_x_A
+        if name == "x_B":
+            return mock_x_B
+        if name == "x_C":
+            return mock_x_C
+        return MagicMock()
+
+    mock_model_instance.addVar.side_effect = addVar_side_effect
+
+    problem = MIPProblem(
+        parameters=Parameters(name="sos_problem", sense=-1, status=0, sol_status=0), # maximize
+        objective=Objective(
+            name="obj",
+            coefficients=[
+                ObjectiveCoefficient(name="x_A", value=100.0),
+                ObjectiveCoefficient(name="x_B", value=120.0),
+                ObjectiveCoefficient(name="x_C", value=80.0),
+            ],
+        ),
+        constraints=[],
+        variables=[
+            Variable(name="x_A", lower_bound=0, upper_bound=1, category="Binary"),
+            Variable(name="x_B", lower_bound=0, upper_bound=1, category="Binary"),
+            Variable(name="x_C", lower_bound=0, upper_bound=1, category="Binary"),
+        ],
+        sos1=[{"sos_factories": {"x_A": 1, "x_B": 2, "x_C": 3}}],
+    )
+
+    # Act
+    model, vars = await solver_wrapper._build_model(problem)
+
+    # Assert
+    mock_model_instance.addVar.assert_any_call(name="x_A", lb=0, ub=1, vtype="I")
+    mock_model_instance.addVar.assert_any_call(name="x_B", lb=0, ub=1, vtype="I")
+    mock_model_instance.addVar.assert_any_call(name="x_C", lb=0, ub=1, vtype="I")
+    mock_model_instance.setObjective.assert_called_once()
+
+    # Check that addConsSOS1 was called correctly
+    mock_model_instance.addConsSOS1.assert_called_once()
+    args, kwargs = mock_model_instance.addConsSOS1.call_args
+    
+    assert kwargs["name"] == "sos_factories"
+    
+    passed_vars = args[0]
+    passed_weights = args[1]
+
+    # The order of variables is not guaranteed because it comes from a dictionary.
+    # We should sort them to have a deterministic test.
+    passed_vars_and_weights = sorted(zip(passed_vars, passed_weights), key=lambda x: x[1])
+    
+    assert passed_vars_and_weights[0][0].name == "x_A"
+    assert passed_vars_and_weights[0][1] == 1
+    assert passed_vars_and_weights[1][0].name == "x_B"
+    assert passed_vars_and_weights[1][1] == 2
+    assert passed_vars_and_weights[2][0].name == "x_C"
+    assert passed_vars_and_weights[2][1] == 3
