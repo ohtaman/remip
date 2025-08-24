@@ -163,20 +163,6 @@ class ScipSolverWrapper:
             else:  # GEQ
                 model.addCons(expr >= rhs, name=const_data.name)
 
-        # Add SOS1 constraints
-        for sos1_constraint in problem.sos1:
-            var_names = [c["name"] for c in sos1_constraint]
-            weights = [c["weight"] for c in sos1_constraint]
-            sos_vars = [vars[name] for name in var_names]
-            model.addConsSOS1(sos_vars, weights)
-
-        # Add SOS2 constraints
-        for sos2_constraint in problem.sos2:
-            var_names = [c["name"] for c in sos2_constraint]
-            weights = [c["weight"] for c in sos2_constraint]
-            sos_vars = [vars[name] for name in var_names]
-            model.addConsSOS2(sos_vars, weights)
-
         obj_coeffs = {c.name: c.value for c in problem.objective.coefficients}
         objective = sum(obj_coeffs[name] * var for name, var in vars.items() if name in obj_coeffs)
         model.setObjective(objective, "minimize" if problem.parameters.sense == 1 else "maximize")
