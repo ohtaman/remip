@@ -66,3 +66,24 @@ async def test_solve_and_stream_events_optimizes_model(MockModel, solver_wrapper
     # Assert
     # In the new implementation, optimize is called instead of setMessagehdlr
     mock_model_instance.optimize.assert_called_once()
+
+
+@patch("remip.solvers.scip_wrapper.Model")
+@pytest.mark.asyncio
+async def test_sos_constraints(MockModel, solver_wrapper, sample_problem):
+    # Arrange
+    mock_model_instance = MagicMock()
+    MockModel.return_value = mock_model_instance
+    mock_model_instance.getNSols.return_value = 0
+    mock_model_instance.getStatus.return_value = "unknown"
+
+    sample_problem.sos1 = [[{"name": "x", "weight": 1.0}]]
+    sample_problem.sos2 = [[{"name": "x", "weight": 1.0}]]
+
+    # Act
+    async for _ in solver_wrapper.solve_and_stream_events(sample_problem):
+        pass
+
+    # Assert
+    mock_model_instance.addConsSOS1.assert_called_once()
+    mock_model_instance.addConsSOS2.assert_called_once()
