@@ -181,6 +181,23 @@ class ScipSolverWrapper:
         objective = sum(obj_coeffs[name] * var for name, var in vars.items() if name in obj_coeffs)
         model.setObjective(objective, "minimize" if problem.parameters.sense == 1 else "maximize")
 
+        # Add SOS constraints
+        if problem.sos1:
+            for sos_dict in problem.sos1:
+                for name, weights_dict in sos_dict.items():
+                    sos_vars = [vars[var_name] for var_name in weights_dict.keys() if var_name in vars]
+                    weights = [weight for var_name, weight in weights_dict.items() if var_name in vars]
+                    if sos_vars:
+                        model.addConsSOS1(sos_vars, weights, name=name)
+
+        if problem.sos2:
+            for sos_dict in problem.sos2:
+                for name, weights_dict in sos_dict.items():
+                    sos_vars = [vars[var_name] for var_name in weights_dict.keys() if var_name in vars]
+                    weights = [weight for var_name, weight in weights_dict.items() if var_name in vars]
+                    if sos_vars:
+                        model.addConsSOS2(sos_vars, weights, name=name)
+
         # Apply solver options
         if problem.solver_options:
             for key, value in problem.solver_options.items():
