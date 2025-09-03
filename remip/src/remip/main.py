@@ -30,6 +30,11 @@ def get_solver_service():
     return MIPSolverService()
 
 
+@app.get("/health")
+async def health():
+    return True
+
+
 @app.post("/solve")
 async def solve(request: Request, problem: MIPProblem, service: MIPSolverService = Depends(get_solver_service)):
     """

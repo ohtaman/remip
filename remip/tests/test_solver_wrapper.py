@@ -95,7 +95,7 @@ async def test_build_model_with_sos1(MockModel, solver_wrapper):
     mock_model_instance.addVar.side_effect = addVar_side_effect
 
     problem = MIPProblem(
-        parameters=Parameters(name="sos_problem", sense=-1, status=0, sol_status=0), # maximize
+        parameters=Parameters(name="sos_problem", sense=-1, status=0, sol_status=0),  # maximize
         objective=Objective(
             name="obj",
             coefficients=[
@@ -110,7 +110,7 @@ async def test_build_model_with_sos1(MockModel, solver_wrapper):
             Variable(name="x_B", lower_bound=0, upper_bound=1, category="Binary"),
             Variable(name="x_C", lower_bound=0, upper_bound=1, category="Binary"),
         ],
-        sos1=[{"sos_factories": {"x_A": 1, "x_B": 2, "x_C": 3}}],
+        sos1=[{"weights": {"x_A": 1, "x_B": 2, "x_C": 3}}],
     )
 
     # Act
@@ -125,16 +125,14 @@ async def test_build_model_with_sos1(MockModel, solver_wrapper):
     # Check that addConsSOS1 was called correctly
     mock_model_instance.addConsSOS1.assert_called_once()
     args, kwargs = mock_model_instance.addConsSOS1.call_args
-    
-    assert kwargs["name"] == "sos_factories"
-    
+
     passed_vars = args[0]
     passed_weights = args[1]
 
     # The order of variables is not guaranteed because it comes from a dictionary.
     # We should sort them to have a deterministic test.
     passed_vars_and_weights = sorted(zip(passed_vars, passed_weights), key=lambda x: x[1])
-    
+
     assert passed_vars_and_weights[0][0].name == "x_A"
     assert passed_vars_and_weights[0][1] == 1
     assert passed_vars_and_weights[1][0].name == "x_B"

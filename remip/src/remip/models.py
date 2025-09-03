@@ -16,7 +16,7 @@ class ObjectiveCoefficient(BaseModel):
 
 
 class Objective(BaseModel):
-    name: str
+    name: Optional[str] = None
     coefficients: List[ObjectiveCoefficient]
 
 
@@ -32,7 +32,7 @@ class Variable(BaseModel):
 
 
 class Constraint(BaseModel):
-    name: str
+    name: Optional[str] = None
     sense: int
     coefficients: List[ObjectiveCoefficient]
     pi: Optional[float] = None

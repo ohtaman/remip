@@ -150,18 +150,21 @@ class ScipSolverWrapper:
                 vtype="C" if var_data.category == "Continuous" else "I",
             )
 
-        for const_data in problem.constraints:
+        for i, const_data in enumerate(problem.constraints):
             coeffs = {c.name: c.value for c in const_data.coefficients}
             sense = const_data.sense
             rhs = -const_data.constant if const_data.constant is not None else 0.0
+            constraint_name = const_data.name or f"unnamed_constraint_{i}"
 
             expr = sum(coeffs[name] * var for name, var in vars.items() if name in coeffs)
+
             if sense == 0:  # EQ
-                model.addCons(expr == rhs, name=const_data.name)
+                constraint = expr == rhs
             elif sense == -1:  # LEQ
-                model.addCons(expr <= rhs, name=const_data.name)
+                constraint = expr <= rhs
             else:  # GEQ
-                model.addCons(expr >= rhs, name=const_data.name)
+                constraint = expr >= rhs
+            model.addCons(constraint, name=constraint_name)
 
         obj_coeffs = {c.name: c.value for c in problem.objective.coefficients}
         objective = sum(obj_coeffs[name] * var for name, var in vars.items() if name in obj_coeffs)
