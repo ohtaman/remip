@@ -110,7 +110,7 @@ async def test_build_model_with_sos1(MockModel, solver_wrapper):
             Variable(name="x_B", lower_bound=0, upper_bound=1, category="Binary"),
             Variable(name="x_C", lower_bound=0, upper_bound=1, category="Binary"),
         ],
-        sos1=[{"weights": {"x_A": 1, "x_B": 2, "x_C": 3}}],
+        sos1=[{"x_A": 1, "x_B": 2, "x_C": 3}],
     )
 
     # Act
