@@ -8,6 +8,7 @@ from typing import Any, AsyncGenerator, Dict, Optional, Tuple
 from pyscipopt import Model
 
 from ..models import (
+    Diagnostics,
     EndEvent,
     LogEvent,
     MetricEvent,
@@ -15,6 +16,7 @@ from ..models import (
     MIPSolution,
     ResultEvent,
     SolverEvent,
+    ViolatedConstraint,
 )
 
 
@@ -203,7 +205,16 @@ class ScipSolverWrapper:
         status = model.getStatus()
         objective_value = None
         solution_vars = {}
-        if model.getNSols() > 0:
+        diagnostics = None
+
+        if status == "infeasible":
+            diagnostics = self._extract_diagnostics(model, vars)
+            # Return current variable values even if infeasible
+            if model.getNSols() > 0:
+                solution = model.getBestSol()
+                for var_name, var in vars.items():
+                    solution_vars[var_name] = solution[var]
+        elif model.getNSols() > 0:
             objective_value = model.getObjVal()
             solution = model.getBestSol()
             for var_name, var in vars.items():
@@ -214,4 +225,61 @@ class ScipSolverWrapper:
             status=status,
             objective_value=objective_value,
             variables=solution_vars,
+            diagnostics=diagnostics,
+        )
+
+    def _extract_diagnostics(self, model: Model, vars: Dict[str, Any]) -> Diagnostics:
+        """Extracts diagnostic information for infeasible problems."""
+        violated_constraints = []
+        dual_values = {}
+        irreducible_infeasible_set = []
+
+        # SCIP/PySCIPOpt does not directly support IIS, but we can check constraint violations
+        # and duals. We will leave IIS empty for now.
+        
+        # Get violated constraints
+        for c in model.getConstrs():
+            activity = model.getActivity(c)
+            rhs = model.getRhs(c)
+            lhs = model.getLhs(c)
+            
+            violation = 0
+            sense = ""
+
+            if model.isLE(c):
+                sense = "<="
+                if activity > rhs:
+                    violation = activity - rhs
+            elif model.isGE(c):
+                sense = ">="
+                if activity < lhs:
+                    violation = lhs - activity
+            elif model.isEQ(c):
+                sense = "=="
+                if activity > rhs:
+                    violation = activity - rhs
+                elif activity < lhs:
+                    violation = lhs - activity
+            
+            if violation > 1e-6:
+                violated_constraints.append(
+                    ViolatedConstraint(
+                        name=c.name,
+                        violation_amount=violation,
+                        left_hand_side=activity,
+                        right_hand_side=rhs if model.isLE(c) or model.isEQ(c) else lhs,
+                        sense=sense,
+                    )
+                )
+            
+            # Get dual values (if available)
+            try:
+                dual_values[c.name] = model.getDualsolLinear(c)
+            except:
+                pass
+
+        return Diagnostics(
+            violated_constraints=violated_constraints,
+            irreducible_infeasible_set=irreducible_infeasible_set,
+            dual_values=dual_values,
         )

@@ -58,6 +58,21 @@ class MIPSolution(BaseModel):
     status: str
     objective_value: Optional[float]
     variables: Dict[str, float]
+    diagnostics: Optional["Diagnostics"] = None
+
+
+class ViolatedConstraint(BaseModel):
+    name: str
+    violation_amount: float
+    left_hand_side: float
+    right_hand_side: float
+    sense: str
+
+
+class Diagnostics(BaseModel):
+    violated_constraints: List[ViolatedConstraint] = []
+    irreducible_infeasible_set: List[str] = []
+    dual_values: Dict[str, float] = {}
 
 
 # SSE Event Models
