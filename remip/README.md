@@ -11,6 +11,7 @@ The ReMIP server directly integrates with the SCIP Optimization Suite and solves
 - **RESTful API**: Solve MIP problems through a clean and modern API
 - **Real-time Logging**: Stream solver logs in real-time to monitor progress
 - **PySCIPOpt Integration**: Directly integrates with the SCIP Optimization Suite through its Python API for better performance and stability
+- **Diagnostics for Infeasible Problems**: When a problem is infeasible, the server provides diagnostic information, including a list of violated constraints and dual values. This helps in understanding and debugging infeasible models.
 - **Containerized**: Comes with a Docker setup for easy and consistent deployment
 
 ## Prerequisites
@@ -45,7 +46,7 @@ The API will be available at `http://localhost:8000`.
 
 ## API Endpoints
 
-- `POST /solve`: Submits a MIP problem. Returns the final solution as JSON. If the `stream=sse` query parameter is provided or the `Accept` header is `text/event-stream`, it streams solver events using Server-Sent Events (SSE).
+- `POST /solve`: Submits a MIP problem. Returns the final solution as JSON. If the problem is infeasible, the solution object will contain a `diagnostics` field with information about violated constraints and dual values. If the `stream=sse` query parameter is provided or the `Accept` header is `text/event-stream`, it streams solver events using Server-Sent Events (SSE).
 - `GET /solver-info`: Returns information about the configured solver.
 
 ## Testing

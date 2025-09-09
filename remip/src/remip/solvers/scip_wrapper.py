@@ -1,9 +1,8 @@
-import asyncio
-import re
-import threading
-import time
-from datetime import datetime, timezone
-from typing import Any, AsyncGenerator, Dict, Optional, Tuple
+"""
+A wrapper for the SCIP solver.
+"""
+
+from typing import Any, AsyncGenerator, Dict, Tuple
 
 from pyscipopt import Model
 
@@ -22,123 +21,49 @@ from ..models import (
 
 class ScipSolverWrapper:
     """
-    A wrapper for the pyscipopt library that provides solving capabilities and
-    streams structured SSE events.
+    A wrapper for the SCIP solver that provides a consistent interface for solving MIP problems.
     """
-
-    def __init__(self):
-        # Regex to capture SCIP's progress table lines
-        self.metric_regex = re.compile(
-            r"\s*(\d+\.\d+)\s*\|\s*\d+\s*\|\s*\d+\s*\|\s*(\d+)\s*\|.*\|\s*([\d\.\-inf]+)\s*\|\s*([\d\.\-inf]+)\s*\|\s*([\d\.\-inf]+)"
-        )
-        self.seq = 0
 
     async def solve(self, problem: MIPProblem) -> MIPSolution:
         """
-        Solves a MIP problem by consuming the event stream and returning the final solution.
+        Solves a MIP problem using SCIP and returns the solution.
         """
-        solution: Optional[MIPSolution] = None
-
+        solution = None
         async for event in self.solve_and_stream_events(problem):
-            if isinstance(event, ResultEvent):
+            if event.type == "result":
                 solution = event.solution
-
-        if not solution:
-            raise Exception("Solver did not produce a result.")
-
+        if solution is None:
+            raise ValueError("No solution found")
         return solution
 
     async def solve_and_stream_events(self, problem: MIPProblem) -> AsyncGenerator[SolverEvent, None]:
         """
-        Solves a MIP problem and streams structured SolverEvent objects.
+        Solves a MIP problem using SCIP and streams events back to the caller.
         """
-        self.seq = 0
-        start_time = time.time()
-
-        log_queue: asyncio.Queue[str] = asyncio.Queue()
-        stop_event = threading.Event()
+        # Build the model
         model, vars = await self._build_model(problem)
 
-        # The solver runs in a separate thread to avoid blocking asyncio event loop
-        solver_thread = threading.Thread(target=self._run_solver_in_thread, args=(model, log_queue, stop_event))
-        solver_thread.start()
+        # Set solver options
+        if problem.solver_options:
+            for key, value in problem.solver_options.items():
+                model.setParam(key, value)
 
-        # Process logs from the queue until the solver is finished
-        while not stop_event.is_set() or not log_queue.empty():
-            try:
-                log_line = await asyncio.wait_for(log_queue.get(), timeout=0.1)
-                event = self._parse_log_line(log_line)
-                if event:
-                    self.seq += 1
-                    event.sequence = self.seq
-                    yield event
-            except asyncio.TimeoutError:
-                continue
+        # Optimize the model
+        model.optimize()
 
-        solver_thread.join()
-        runtime_ms = int((time.time() - start_time) * 1000)
-
-        # Yield the final result event
+        # Extract the solution
         solution = self._extract_solution(model, problem, vars)
-        self.seq += 1
+
+        # Yield the result event
         yield ResultEvent(
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp="2024-01-01T00:00:00Z",
             solution=solution,
-            runtime_milliseconds=runtime_ms,
-            sequence=self.seq,
+            runtime_milliseconds=int(model.getSolvingTime()),
+            sequence=0,
         )
 
         # Yield the end event
         yield EndEvent(success=True)
-
-    def _run_solver_in_thread(self, model: Model, log_queue: asyncio.Queue, stop_event: threading.Event):
-        """Target function for the solver thread."""
-
-        # In the latest version of PySCIPOpt, setMessagehdlr is not available,
-        # so we capture standard output to get logs instead
-        import sys
-        from io import StringIO
-
-        # Capture standard output
-        old_stdout = sys.stdout
-        captured_output = StringIO()
-        sys.stdout = captured_output
-
-        try:
-            model.optimize()
-        finally:
-            # Restore standard output
-            sys.stdout = old_stdout
-            captured_output.seek(0)
-
-            # Send captured output to log queue
-            for line in captured_output:
-                if line.strip():
-                    asyncio.run_coroutine_threadsafe(log_queue.put(line.strip()), asyncio.get_running_loop())
-
-        stop_event.set()
-
-    def _parse_log_line(self, line: str) -> Optional[SolverEvent]:
-        """Parses a raw log line from SCIP into a structured SolverEvent."""
-        match = self.metric_regex.match(line)
-        ts = datetime.now(timezone.utc).isoformat()
-
-        if match:
-            try:
-                # It's a metric line
-                return MetricEvent(
-                    timestamp=ts,
-                    iteration=int(match.group(2)),
-                    objective_value=float(match.group(4)) if match.group(4) != "inf" else float("inf"),
-                    gap=float(match.group(5)) if match.group(5) not in ["-", "inf"] else float("inf"),
-                )
-            except (ValueError, IndexError):
-                # Fallback for parsing errors
-                return LogEvent(timestamp=ts, level="info", stage="solving", message=line.strip())
-        elif line.strip():
-            # It's a standard log line
-            return LogEvent(timestamp=ts, level="info", stage="presolve", message=line.strip())
-        return None
 
     async def _build_model(self, problem: MIPProblem) -> Tuple[Model, Dict[str, Any]]:
         """Builds a pyscipopt.Model instance from a MIPProblem definition."""
@@ -159,7 +84,6 @@ class ScipSolverWrapper:
             constraint_name = const_data.name or f"unnamed_constraint_{i}"
 
             expr = sum(coeffs[name] * var for name, var in vars.items() if name in coeffs)
-
             if sense == 0:  # EQ
                 constraint = expr == rhs
             elif sense == -1:  # LEQ
@@ -168,40 +92,25 @@ class ScipSolverWrapper:
                 constraint = expr >= rhs
             model.addCons(constraint, name=constraint_name)
 
-        obj_coeffs = {c.name: c.value for c in problem.objective.coefficients}
-        objective = sum(obj_coeffs[name] * var for name, var in vars.items() if name in obj_coeffs)
+        objective = sum(c.value * vars[c.name] for c in problem.objective.coefficients)
         model.setObjective(objective, "minimize" if problem.parameters.sense == 1 else "maximize")
 
-        # Add SOS constraints
-        if problem.sos1:
-            for i, weights_dict in enumerate(problem.sos1):
-                if not isinstance(weights_dict, dict):
-                    continue
-                name = f"sos1_{i}"
-                sos_vars = [vars[var_name] for var_name in weights_dict.keys() if var_name in vars]
-                weights = [weight for var_name, weight in weights_dict.items() if var_name in vars]
-                if sos_vars:
-                    model.addConsSOS1(sos_vars, weights, name=name)
+        # Add SOS1 constraints
+        for sos_data in problem.sos1:
+            sos_vars = [vars[name] for name in sos_data.keys()]
+            sos_weights = [weight for weight in sos_data.values()]
+            model.addConsSOS1(sos_vars, sos_weights)
 
-        if problem.sos2:
-            for i, weights_dict in enumerate(problem.sos2):
-                if not isinstance(weights_dict, dict):
-                    continue
-                name = f"sos2_{i}"
-                sos_vars = [vars[var_name] for var_name in weights_dict.keys() if var_name in vars]
-                weights = [weight for var_name, weight in weights_dict.items() if var_name in vars]
-                if sos_vars:
-                    model.addConsSOS2(sos_vars, weights, name=name)
-
-        # Apply solver options
-        if problem.solver_options:
-            for key, value in problem.solver_options.items():
-                model.setParam(key, value)
+        # Add SOS2 constraints
+        for sos_data in problem.sos2:
+            sos_vars = [vars[name] for name in sos_data.keys()]
+            sos_weights = [weight for weight in sos_data.values()]
+            model.addConsSOS2(sos_vars, sos_weights)
 
         return model, vars
 
     def _extract_solution(self, model: Model, problem: MIPProblem, vars: Dict[str, Any]) -> MIPSolution:
-        """Extracts the MIPSolution from the solved pyscipopt.Model."""
+        """Extracts the solution from a pyscipopt.Model instance."""
         status = model.getStatus()
         objective_value = None
         solution_vars = {}

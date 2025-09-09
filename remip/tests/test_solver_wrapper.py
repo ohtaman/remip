@@ -2,7 +2,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from remip.models import MIPProblem, Objective, ObjectiveCoefficient, Parameters, Variable
+from remip.models import (
+    Constraint,
+    MIPProblem,
+    Objective,
+    ObjectiveCoefficient,
+    Parameters,
+    Variable,
+)
 from remip.solvers.scip_wrapper import ScipSolverWrapper
 
 
@@ -47,6 +54,72 @@ async def test_solve(MockModel, solver_wrapper, sample_problem):
     assert solution.objective_value == 1.0
     assert solution.variables["x"] == 1.0
     mock_model_instance.optimize.assert_called_once()
+
+
+@patch("remip.solvers.scip_wrapper.Model")
+@pytest.mark.asyncio
+async def test_solve_infeasible(MockModel, solver_wrapper):
+    # Arrange
+    mock_model_instance = MagicMock()
+    MockModel.return_value = mock_model_instance
+    mock_model_instance.getStatus.return_value = "infeasible"
+    mock_model_instance.getNSols.return_value = 0
+
+    # Mock constraint and variable
+    mock_var = MagicMock()
+    mock_var.name = "x"
+    mock_var.__mul__.return_value = mock_var
+    mock_var.__rmul__.return_value = mock_var
+    
+    add_result = MagicMock()
+    add_result.__ge__.return_value = MagicMock()
+    mock_var.__add__.return_value = add_result
+    
+    radd_result = MagicMock()
+    radd_result.__ge__.return_value = MagicMock()
+    mock_var.__radd__.return_value = radd_result
+    
+    mock_model_instance.addVar.return_value = mock_var
+
+    mock_constr = MagicMock()
+    mock_constr.name = "c1"
+    mock_model_instance.getConstrs.return_value = [mock_constr]
+    mock_model_instance.isGE.return_value = True
+    mock_model_instance.isLE.return_value = False
+    mock_model_instance.isEQ.return_value = False
+    mock_model_instance.getActivity.return_value = 1.0
+    mock_model_instance.getLhs.return_value = 2.0
+    mock_model_instance.getRhs.return_value = 2.0
+    mock_model_instance.getDualsolLinear.return_value = -1.0
+
+    infeasible_problem = MIPProblem(
+        parameters=Parameters(name="infeasible_problem", sense=1, status=0, sol_status=0),
+        objective=Objective(name="obj", coefficients=[ObjectiveCoefficient(name="x", value=1.0)]),
+        constraints=[
+            Constraint(
+                name="c1",
+                sense=1,
+                coefficients=[ObjectiveCoefficient(name="x", value=1.0)],
+                constant=-2.0,
+            )
+        ],
+        variables=[Variable(name="x", lower_bound=0, upper_bound=1, category="Continuous")],
+    )
+
+    # Act
+    solution = await solver_wrapper.solve(infeasible_problem)
+
+    # Assert
+    assert solution.status == "infeasible"
+    assert solution.diagnostics is not None
+    assert len(solution.diagnostics.violated_constraints) == 1
+    violated_constraint = solution.diagnostics.violated_constraints[0]
+    assert violated_constraint.name == "c1"
+    assert violated_constraint.violation_amount == 1.0
+    assert violated_constraint.left_hand_side == 1.0
+    assert violated_constraint.right_hand_side == 2.0
+    assert violated_constraint.sense == ">="
+    assert solution.diagnostics.dual_values["c1"] == -1.0
 
 
 @patch("remip.solvers.scip_wrapper.Model")
