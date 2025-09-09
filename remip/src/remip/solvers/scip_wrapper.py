@@ -8,6 +8,7 @@ from typing import Any, AsyncGenerator, Dict, Optional, Tuple
 from pyscipopt import Model
 
 from ..models import (
+    Diagnostics,
     EndEvent,
     LogEvent,
     MetricEvent,
@@ -15,6 +16,7 @@ from ..models import (
     MIPSolution,
     ResultEvent,
     SolverEvent,
+    ViolatedConstraint,
 )
 
 
@@ -203,7 +205,68 @@ class ScipSolverWrapper:
         status = model.getStatus()
         objective_value = None
         solution_vars = {}
-        if model.getNSols() > 0:
+        diagnostics = None
+
+        if status == "infeasible":
+            # --- Infeasible Diagnostics ---
+            model.setPresolve(Model.Presolve.OFF)
+            model.setHeuristics(Model.Heuristics.OFF)
+
+            violated_constraints = []
+            dual_values = {}
+
+            # Get variable values from the last LP relaxation
+            for var_name, var in vars.items():
+                try:
+                    solution_vars[var_name] = model.getVal(var)
+                except Exception:
+                    solution_vars[var_name] = 0.0  # Fallback
+
+            # Analyze constraints
+            for c in model.getConss():
+                if not model.isLinearCons(c):
+                    continue
+
+                activity = model.getActivity(c)
+                rhs = c.getRhs()
+                lhs = c.getLhs()
+                sense = c.getSensedString()
+                violation = 0.0
+
+                if sense == "L":  # <=
+                    if activity > rhs:
+                        violation = activity - rhs
+                elif sense == "G":  # >=
+                    if activity < lhs:
+                        violation = lhs - activity
+                elif sense == "E":  # ==
+                    violation = abs(activity - rhs)
+
+                if violation > 1e-6:
+                    violated_constraints.append(
+                        ViolatedConstraint(
+                            name=c.name,
+                            violation_amount=violation,
+                            left_hand_side=activity,
+                            right_hand_side=rhs if sense != "G" else lhs,
+                            sense=sense,
+                        )
+                    )
+
+                # Get Farkas duals
+                try:
+                    dual_values[c.name] = model.getDualfarkasLinear(c)
+                except Exception:
+                    dual_values[c.name] = 0.0
+
+            diagnostics = Diagnostics(
+                violated_constraints=violated_constraints,
+                irreducible_infeasible_set=[],  # IIS not supported by PySCIPOpt
+                dual_values=dual_values,
+            )
+
+        elif model.getNSols() > 0:
+            # --- Feasible Solution ---
             objective_value = model.getObjVal()
             solution = model.getBestSol()
             for var_name, var in vars.items():
@@ -214,4 +277,5 @@ class ScipSolverWrapper:
             status=status,
             objective_value=objective_value,
             variables=solution_vars,
+            diagnostics=diagnostics,
         )
