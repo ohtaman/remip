@@ -10,6 +10,7 @@ The ReMIP server directly integrates with the SCIP Optimization Suite and solves
 
 - **RESTful API**: Solve MIP problems through a clean and modern API
 - **Real-time Logging**: Stream solver logs in real-time to monitor progress
+- **Infeasibility Diagnostics**: When a problem is found to be infeasible, the solver returns detailed diagnostics, including a list of violated constraints and their dual values. This helps in identifying the root cause of the infeasibility.
 - **PySCIPOpt Integration**: Directly integrates with the SCIP Optimization Suite through its Python API for better performance and stability
 - **Containerized**: Comes with a Docker setup for easy and consistent deployment
 

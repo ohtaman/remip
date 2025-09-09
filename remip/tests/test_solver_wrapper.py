@@ -49,6 +49,55 @@ async def test_solve(MockModel, solver_wrapper, sample_problem):
     mock_model_instance.optimize.assert_called_once()
 
 
+@patch("remip.solvers.scip_wrapper.ScipSolverWrapper._build_model")
+@pytest.mark.asyncio
+async def test_solve_infeasible(MockBuildModel, solver_wrapper):
+    # Arrange
+    mock_model_instance = MagicMock()
+    mock_vars = {"x": MagicMock()}
+    MockBuildModel.return_value = (mock_model_instance, mock_vars)
+
+    mock_model_instance.getStatus.return_value = "infeasible"
+    mock_model_instance.getNSols.return_value = 0
+
+    # Simulate SCIP's behavior for infeasible problems
+    mock_constraint = MagicMock()
+    mock_constraint.name = "C1"
+    mock_model_instance.getConstrs.return_value = [mock_constraint]
+    mock_model_instance.getActivity.return_value = 0.0
+    mock_model_instance.getRhs.return_value = 1.0
+    mock_model_instance.getLhs.return_value = 2.0
+    mock_model_instance.isLE.return_value = False
+    mock_model_instance.isGE.return_value = True
+    mock_model_instance.isEQ.return_value = False
+    mock_model_instance.getDualsolLinear.return_value = 1.0
+
+    problem = MIPProblem(
+        parameters=Parameters(name="infeasible_problem", sense=1, status=0, sol_status=0),
+        objective=Objective(name="obj", coefficients=[ObjectiveCoefficient(name="x", value=1.0)]),
+        constraints=[
+            {
+                "name": "C1",
+                "coefficients": [{"name": "x", "value": 1.0}],
+                "sense": 1,
+                "constant": -2.0,
+            }
+        ],
+        variables=[Variable(name="x", lower_bound=0, upper_bound=1, category="Continuous")],
+    )
+
+    # Act
+    solution = await solver_wrapper.solve(problem)
+
+    # Assert
+    assert solution.status == "infeasible"
+    assert solution.objective_value is None
+    assert solution.variables == {}
+    assert solution.diagnostics is not None
+    assert len(solution.diagnostics.violated_constraints) > 0
+    assert len(solution.diagnostics.dual_values) > 0
+
+
 @patch("remip.solvers.scip_wrapper.Model")
 @pytest.mark.asyncio
 async def test_solve_and_stream_events_optimizes_model(MockModel, solver_wrapper, sample_problem):
