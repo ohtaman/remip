@@ -70,6 +70,25 @@ solver = ReMIPSolver(
 )
 ```
 
+## Accessing Solution Information
+
+After solving a problem, the `LpProblem` object is populated with the solution details.
+In addition to the standard PuLP attributes, the following fields are also available on the `LpProblem` object:
+
+-   `mip_gap`: The final MIP gap (for MIP problems).
+-   `slacks`: A dictionary of constraint names and their slack values.
+-   `duals`: A dictionary of constraint names and their dual values (for LP problems).
+-   `reduced_costs`: A dictionary of variable names and their reduced costs (for LP problems).
+
+### Example
+
+```python
+# ... after solving the problem ...
+
+print(f"MIP Gap: {prob.mip_gap}")
+print(f"Slacks: {prob.slacks}")
+```
+
 ## API Reference
 
 ### ReMIPSolver

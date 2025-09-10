@@ -2,7 +2,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from remip.models import MIPProblem, Objective, ObjectiveCoefficient, Parameters, Variable
+from remip.models import (
+    Constraint,
+    MIPProblem,
+    Objective,
+    ObjectiveCoefficient,
+    Parameters,
+    Variable,
+)
 from remip.solvers.scip_wrapper import ScipSolverWrapper
 
 
@@ -18,6 +25,86 @@ def sample_problem():
         objective=Objective(name="obj", coefficients=[ObjectiveCoefficient(name="x", value=1.0)]),
         constraints=[],
         variables=[Variable(name="x", lower_bound=0, upper_bound=1, category="Continuous")],
+    )
+
+
+@pytest.fixture
+def lp_problem():
+    """A simple LP problem."""
+    return MIPProblem(
+        parameters=Parameters(name="lp_problem", sense=-1, status=0, sol_status=0),  # maximize
+        objective=Objective(
+            name="obj",
+            coefficients=[
+                ObjectiveCoefficient(name="x", value=1.0),
+                ObjectiveCoefficient(name="y", value=2.0),
+            ],
+        ),
+        constraints=[
+            Constraint(
+                name="c1",
+                sense=-1,
+                coefficients=[
+                    ObjectiveCoefficient(name="x", value=-1.0),
+                    ObjectiveCoefficient(name="y", value=1.0),
+                ],
+                constant=-1.0,  # Represents RHS, so -x + y <= 1
+            ),
+            Constraint(
+                name="c2",
+                sense=-1,
+                coefficients=[
+                    ObjectiveCoefficient(name="x", value=1.0),
+                    ObjectiveCoefficient(name="y", value=1.0),
+                ],
+                constant=-2.0,  # Represents RHS, so x + y <= 2
+            ),
+        ],
+        variables=[
+            Variable(name="x", lower_bound=0, upper_bound=None, category="Continuous"),
+            Variable(name="y", lower_bound=0, upper_bound=None, category="Continuous"),
+        ],
+        solver_options={"presolving/maxrounds": 0},
+    )
+
+
+@pytest.fixture
+def mip_problem():
+    """A simple MIP problem."""
+    return MIPProblem(
+        parameters=Parameters(name="mip_problem", sense=-1, status=0, sol_status=0),  # maximize
+        objective=Objective(
+            name="obj",
+            coefficients=[
+                ObjectiveCoefficient(name="x", value=1.0),
+                ObjectiveCoefficient(name="y", value=2.0),
+            ],
+        ),
+        constraints=[
+            Constraint(
+                name="c1",
+                sense=-1,
+                coefficients=[
+                    ObjectiveCoefficient(name="x", value=-1.0),
+                    ObjectiveCoefficient(name="y", value=1.0),
+                ],
+                constant=-1.0,
+            ),
+            Constraint(
+                name="c2",
+                sense=-1,
+                coefficients=[
+                    ObjectiveCoefficient(name="x", value=1.0),
+                    ObjectiveCoefficient(name="y", value=1.0),
+                ],
+                constant=-2.0,
+            ),
+        ],
+        variables=[
+            Variable(name="x", lower_bound=0, upper_bound=None, category="Integer"),
+            Variable(name="y", lower_bound=0, upper_bound=None, category="Continuous"),
+        ],
+        solver_options={"presolving/maxrounds": 0},
     )
 
 
@@ -38,6 +125,9 @@ async def test_solve(MockModel, solver_wrapper, sample_problem):
     mock_model_instance.getStatus.return_value = "optimal"
     mock_model_instance.getObjVal.return_value = 1.0
     mock_model_instance.getNSols.return_value = 1
+    mock_model_instance.getNBinVars.return_value = 0
+    mock_model_instance.getNIntVars.return_value = 0
+    mock_model_instance.getConss.return_value = []
 
     # Act
     solution = await solver_wrapper.solve(sample_problem)
@@ -57,6 +147,9 @@ async def test_solve_and_stream_events_optimizes_model(MockModel, solver_wrapper
     MockModel.return_value = mock_model_instance
     mock_model_instance.getNSols.return_value = 0  # Avoid TypeError
     mock_model_instance.getStatus.return_value = "not solved"  # Avoid ValidationError
+    mock_model_instance.getNBinVars.return_value = 0
+    mock_model_instance.getNIntVars.return_value = 0
+    mock_model_instance.getConss.return_value = []
 
     # Act
     # We need to consume the generator to execute the code
@@ -139,3 +232,48 @@ async def test_build_model_with_sos1(MockModel, solver_wrapper):
     assert passed_vars_and_weights[1][1] == 2
     assert passed_vars_and_weights[2][0].name == "x_C"
     assert passed_vars_and_weights[2][1] == 3
+
+
+@pytest.mark.asyncio
+async def test_solve_lp_problem(solver_wrapper, lp_problem):
+    solution = await solver_wrapper.solve(lp_problem)
+
+    assert solution.status == "optimal"
+    assert solution.objective_value == pytest.approx(3.5)
+    assert solution.variables["x"] == pytest.approx(0.5)
+    assert solution.variables["y"] == pytest.approx(1.5)
+
+    assert solution.mip_gap is None or solution.mip_gap == 0.0
+
+    assert solution.slacks is not None
+    assert solution.slacks["c1"] == pytest.approx(0.0)
+    assert solution.slacks["c2"] == pytest.approx(0.0)
+
+    assert solution.duals is not None
+    assert solution.duals["c1"] == pytest.approx(0.5)
+    assert solution.duals["c2"] == pytest.approx(1.5)
+
+    assert solution.reduced_costs is not None
+    assert solution.reduced_costs["x"] == pytest.approx(0.0)
+    assert solution.reduced_costs["y"] == pytest.approx(0.0)
+
+
+@pytest.mark.asyncio
+async def test_solve_mip_problem(solver_wrapper, mip_problem):
+    solution = await solver_wrapper.solve(mip_problem)
+
+    assert solution.status == "optimal"
+    # With x as integer, the optimal solution is x=1, y=1, obj=3
+    assert solution.objective_value == pytest.approx(3.0)
+    assert solution.variables["x"] == pytest.approx(1.0)
+    assert solution.variables["y"] == pytest.approx(1.0)
+
+    assert solution.mip_gap is not None
+    assert solution.mip_gap == pytest.approx(0.0)
+
+    assert solution.slacks is not None
+    assert solution.slacks["c1"] == pytest.approx(1.0)  # -1 + 1 = 0 <= 1, slack is 1
+    assert solution.slacks["c2"] == pytest.approx(0.0)  # 1 + 1 = 2 <= 2, slack is 0
+
+    assert solution.duals is None
+    assert solution.reduced_costs is None

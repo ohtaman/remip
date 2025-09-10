@@ -1,59 +1,72 @@
-# Implementation Tasks for API Refactoring
+# Task List for Solution Enhancements
 
-Based on the updated `design.md`, the following tasks need to be completed to refactor the API.
+This document breaks down the implementation of the solution enhancement features into smaller, actionable tasks.
 
-## 1. Refactor API Endpoints (`main.py`)
+## 1. Core `remip` Implementation
 
-- [x] Remove the `GET /solve-stream` endpoint.
-- [x] Update the `POST /solve` endpoint to handle both standard JSON responses and streaming responses.
-- [x] Implement logic to check for the `stream` query parameter or the `Accept: text/event-stream` header to determine the response type.
+-   **Task 1.1: Update `remip.models.Solution`**
+    -   **File:** `remip/src/remip/models.py`
+    -   **Details:** Add the new optional fields to the `Solution` Pydantic model:
+        -   `mip_gap: Optional[float] = None`
+        -   `slacks: Optional[Dict[str, float]] = None`
+        -   `duals: Optional[Dict[str, float]] = None`
+        -   `reduced_costs: Optional[Dict[str, float]] = None`
 
-## 2. Refactor MIP Solver Service (`services.py`)
+-   **Task 1.2: Implement Data Population in `scip_wrapper.py`**
+    -   **File:** `remip/src/remip/solvers/scip_wrapper.py`
+    -   **Details:**
+        -   In the `solve` method, after the problem is solved, retrieve the additional solution information from the PySCIPOpt model.
+        -   Populate `mip_gap` using `model.getGap()`.
+        -   Implement logic to calculate and populate `slacks`. Iterate through constraints, get activity, and calculate slack against LHS/RHS.
+        -   For LP problems (check with `model.isMIP()`), implement logic to populate `duals` using `model.getDualsol()`.
+        -   For LP problems, implement logic to populate `reduced_costs` using `model.getReducedcost()` for each variable.
+        -   Pass the new data when creating the `Solution` object.
 
-- [x] Consolidate the `solve_problem` and `solve_problem_stream` methods into a single method that can be used for both streaming and non-streaming responses.
-- [x] The new method should return an async generator.
+## 2. `remip` Testing
 
-## 3. Update API Tests (`tests/test_api.py`)
+-   **Task 2.1: Write Unit Tests for `Solution` Model**
+    -   **File:** `remip/tests/test_models.py`
+    -   **Details:**
+        -   Add a test to create a `Solution` instance with the new fields.
+        -   Add a test for `Solution` serialization and deserialization to ensure the new fields are handled correctly.
 
-- [x] Remove tests for the deprecated `/solve-stream` endpoint.
-- [x] Add new tests for the `POST /solve` endpoint to verify both standard and streaming responses.
-- [x] Ensure tests cover the `stream` query parameter and `Accept` header functionality.
+-   **Task 2.2: Write Unit Tests for `scip_wrapper.py`**
+    -   **File:** `remip/tests/test_solver_wrapper.py`
+    -   **Details:**
+        -   Add a test with a simple MIP problem to verify:
+            -   `mip_gap` is correctly populated.
+            -   `slacks` are correctly calculated.
+            -   `duals` and `reduced_costs` are `None`.
+        -   Add a test with a simple LP problem to verify:
+            -   `mip_gap` is `None` or `0.0`.
+            -   `slacks` are correctly calculated.
+            -   `duals` are correctly populated with expected values.
+            -   `reduced_costs` are correctly populated with expected values.
+        -   Add a test for an infeasible problem to ensure graceful failure (new fields are `None`).
 
-## 4. Update Client Library (`remip-client`)
+## 3. `remip-client` Updates
 
-- [x] Update the client in `remip-client/src/remip_client/solver.py` to use the new unified `/solve` endpoint.
-- [x] Add support for handling streaming responses in the client.
-- [x] Update client tests in `remip-client/tests/test_solver.py`.
+-   **Task 3.1: Update `remip_client.solver.Solution`**
+    -   **File:** `remip-client/src/remip_client/solver.py`
+    -   **Details:** Add the new optional fields to the `Solution` dataclass to match the `remip` server's `Solution` model.
 
-## 5. Documentation
+-   **Task 3.2: Write Unit Tests for `remip-client`**
+    -   **File:** `remip-client/tests/test_solver.py`
+    -   **Details:**
+        -   Add a test to verify the `Solution` dataclass in the client has the new fields.
+        -   Add a test to simulate a response from the server with the new fields and verify the client can deserialize it correctly.
 
-- [x] Update the `README.md` and any other relevant documentation to reflect the API changes.
-- [x] Ensure the examples show how to use the new unified endpoint for both response types.
+## 4. Documentation
 
-## 6. Code Cleanup
+-   **Task 4.1: Update READMEs or other documentation**
+    -   **Files:** `remip/README.md`, `remip-client/README.md` (and any other relevant docs)
+    -   **Details:** Briefly document the new fields available in the `Solution` object and how to use them. Explain which fields are only available for LP problems.
 
-- [x] Remove any dead code related to the old streaming implementation.
-- [x] Ensure the codebase adheres to the style guide (run `ruff format .` and `ruff check . --fix`).
-- [x] Verify all tests pass.
-- [x] Create a pull request with the changes.
-- [x] Delete the feature branch after merging.
-- [x] Close the related issue.
+## 5. Final Review and Merge
 
-## 7. Implement SSE Event Stream Response
-
-- [ ] **Modify `MIP Solver Service` (`services.py`):**
-    - [ ] Update the solver service's streaming method to yield structured data (dictionaries or Pydantic models) for logs, metrics, results, and end events, instead of just raw log lines.
-    - [ ] Create Pydantic models in `models.py` for the different SSE event data structures (`LogEvent`, `MetricEvent`, `ResultEvent`, `EndEvent`).
-- [ ] **Update API Endpoint (`main.py`):**
-    - [ ] Modify the `POST /solve` endpoint's streaming logic.
-    - [ ] It should take the structured data from the service and format it into the correct `event: <type>` and `data: <json>` SSE string format.
-- [ ] **Update `SCIP Solver Wrapper` (`solvers/scip_wrapper.py`):**
-    - [ ] Modify the wrapper to parse the raw SCIP solver output.
-    - [ ] It needs to identify and extract different types of information (presolve logs, progress metrics, final solution) and yield them as distinct event types.
-- [ ] **Update API Tests (`tests/test_api.py`):**
-    - [ ] Update the streaming tests to validate the new SSE event structure.
-    - [ ] Add tests to ensure each event type (`log`, `metric`, `result`, `end`) is received correctly with the expected JSON payload.
-- [ ] **Update Client Library (`remip-client`):**
-    - [ ] Update the client to parse the SSE events.
-    - [ ] The client should be able to handle the different event types and extract their data.
-    - [ ] Update client tests to reflect these changes.
+-   **Task 5.1: Create Pull Request**
+    -   **Details:** Create a pull request from the `feature/solution-enhancements` branch to the main development branch. The PR description should summarize the changes.
+-   **Task 5.2: Code Review**
+    -   **Details:** Request a code review from team members.
+-   **Task 5.3: Merge**
+    -   **Details:** After approval, merge the pull request.

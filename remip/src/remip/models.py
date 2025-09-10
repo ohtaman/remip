@@ -58,6 +58,10 @@ class MIPSolution(BaseModel):
     status: str
     objective_value: Optional[float]
     variables: Dict[str, float]
+    mip_gap: Optional[float] = None
+    slacks: Optional[Dict[str, float]] = None
+    duals: Optional[Dict[str, float]] = None
+    reduced_costs: Optional[Dict[str, float]] = None
 
 
 # SSE Event Models

@@ -1,241 +1,100 @@
-# Detailed Design - MIP Solver API
+# Design for Solution Enhancements
 
-## 1. Architecture Overview
+## 1. Overview
 
-This document outlines the detailed design for the MIP Solver API, a FastAPI-based service for solving Mixed-Integer Programming problems.
+This document provides the technical design for incorporating MIP gap, constraint slacks, dual values, and reduced costs into the solution object. This design is based on the approved requirements.
 
-### 1.1 System Architecture Diagram
+The primary changes will be in the `remip.models.Solution` class and the solver wrapper (`remip.solvers.scip_wrapper.ScipWrapper`) that creates the `Solution` object.
 
-```mermaid
-graph TD
-    subgraph Client
-        A[Python Client Library]
-        B[HTTP Client]
-    end
+## 2. Data Model Changes
 
-    subgraph Server (FastAPI)
-        C[API Endpoints]
-        D[MIP Solver Service]
-        E[Data Models]
-    end
+The `remip.models.Solution` class will be extended to include the new attributes.
 
-    subgraph Solver
-        F[SCIP Solver]
-    end
+```python
+# In remip/models.py
 
-    A -- PuLP Interface --> C
-    B -- HTTP Requests --> C
-    C -- Calls --> D
-    D -- Uses --> E
-    D -- Executes --> F
-    F -- Returns Solution --> D
-    D -- Returns Solution --> C
-    C -- HTTP Response --> B
-    C -- Streams Logs --> B
-    C -- Updates --> A
-```
+from typing import Dict, Optional
+from pydantic import BaseModel
 
-### 1.2 Technology Stack
+# ... existing Solution class ...
 
-- **Language**: Python 3.11+
-- **Frameworks**: FastAPI
-- **Web Server**: Uvicorn
-- **Libraries**:
-  - `pulp`: For modeling and interacting with problems in the client library.
-  - `scipy`: The core MIP solver.
-  - `fastapi`: The web framework.
-  - `pydantic`: For data validation and settings management.
-- **Tools**:
-  - `pytest`: For testing.
-  - `ruff`: For linting and formatting.
-  - `git`: For version control.
-
-## 2. Component Design
-
-### 2.1 Component List
-
-| Component Name | Responsibility | Dependencies |
-| :--- | :--- | :--- |
-| **API Endpoints** | Handles incoming HTTP requests, validates data, and returns responses. | MIP Solver Service, Data Models |
-| **MIP Solver Service** | Contains the core logic for receiving a problem, invoking the solver, and handling the results and logs. | SCIP Solver, Data Models |
-| **Data Models** | Defines the Pydantic models for API request/response bodies and problem structure. | Pydantic |
-| **Python Client** | Provides a PuLP-compatible solver interface that communicates with the API. | PuLP, HTTPX |
-
-### 2.2 Component Details
-
-#### API Endpoints
-
-- **Purpose**: To provide a clean, stable HTTP interface for submitting problems and retrieving results.
-- **Public Interface**:
-  - `POST /solve`: Accepts a JSON representation of a PuLP problem, solves it, and returns the JSON solution.
-  - `GET /solve-stream`: Accepts a JSON representation of a PuLP problem, solves it, and streams the solver logs back to the client via Server-Sent Events (SSE).
-  - `GET /solver-info`: Returns information about the configured solver.
-
-#### MIP Solver Service
-
-- **Purpose**: To orchestrate the solving process, manage solver instances, and capture logs.
-- **Internal Interface**:
-  ```python
-  class MIPSolverService:
-      def solve_problem(self, problem_data: dict) -> dict:
-          # Solves the problem and returns the final result
-          pass
-
-      async def solve_problem_stream(self, problem_data: dict) -> AsyncGenerator[str, None]:
-          # Solves the problem and yields log lines
-          pass
-  ```
-- **Internal Implementation Strategy**: This service will take the dictionary representation of the problem, reconstruct it into a format the solver can understand, and apply any solver-specific options from the `solver_options` field. It will run the solver in a separate process to avoid blocking and capture its stdout/stderr for logging.
-
-#### Data Models
-
-- **Purpose**: To ensure all data exchanged with the API is well-formed and validated.
-- **Public Interface**:
-  ```python
-  from pydantic import BaseModel, Field
-  from typing import List, Dict, Any, Optional
-
-  class MIPProblem(BaseModel):
-      # Based on PuLP's to_dict() structure
-      name: str
-      sense: int
-      objective: Dict
-      constraints: List[Dict]
-      variables: Dict
-      solver_options: Optional[Dict[str, Any]] = None # For solver-specific kwargs
-
-  class MIPSolution(BaseModel):
-      name: str
-      status: str
-      objective_value: float
-      variables: Dict[str, float]
-  ```
-
-## 3. Data Flow
-
-### 3.1 Data Flow Diagram
+class Solution(BaseModel):
+    # ... existing fields ...
+    mip_gap: Optional[float] = None
+    slacks: Optional[Dict[str, float]] = None
+    duals: Optional[Dict[str, float]] = None
+    reduced_costs: Optional[Dict[str, float]] = None
 
 ```
-[Client] --(JSON: LpProblem)--> [POST /solve]
-           |
-           `--(JSON: LpProblem)--> [GET /solve-stream]
 
-[API Endpoint] --(dict)--> [MIP Solver Service]
-[MIP Solver Service] --(Solver-specific format)--> [SCIP Solver]
-[SCIP Solver] --(Solution text)--> [MIP Solver Service]
-[MIP Solver Service] --(dict)--> [API Endpoint]
+### 2.1. `mip_gap`
 
-[API Endpoint] --(JSON: MIPSolution)--> [Client]
-               |
-               `--(SSE stream: str)--> [Client]
-```
+-   A `float` to store the MIP gap.
+-   It will be `None` if not applicable (e.g., for LPs).
 
-### 3.2 Data Transformation
+### 2.2. `slacks`
 
-- **Input Data Format**: JSON object conforming to the structure created by PuLP's `to_dict()` method.
-- **Processing Steps**:
-  1. The API receives the JSON and validates it against the `MIPProblem` Pydantic model.
-  2. The `MIPSolverService` converts the validated data into a temporary file or data structure that the SCIP command-line interface can read.
-  3. The solver process is executed.
-  4. The service parses the solver's output (solution details and status) from its stdout.
-  5. The parsed data is structured into the `MIPSolution` Pydantic model.
-- **Output Data Format**: JSON object conforming to the `MIPSolution` schema. For streaming, the output is a text stream of log lines.
+-   A dictionary mapping constraint names (`str`) to their slack values (`float`).
+-   `None` if not computed or not applicable.
 
-## 4. API Interface
+### 2.3. `duals`
 
-### 4.1 Internal API
+-   A dictionary mapping constraint names (`str`) to their dual values (`float`).
+-   `None` if not available (e.g., for MIPs).
 
-- The interface between the `API Endpoints` and the `MIP Solver Service` will be direct Python function calls, using the Pydantic models for data transfer.
+### 2.4. `reduced_costs`
 
-### 4.2 External API
+-   A dictionary mapping variable names (`str`) to their reduced costs (`float`).
+-   `None` if not available (e.g., for MIPs).
 
-- **`POST /solve`**
-  - **Request Body**: `application/json` - `MIPProblem`
-  - **Query Parameter**: `stream=sse` (optional; if specified, enables streaming response)
-  - **Automatic detection via Accept header**: If `Accept: text/event-stream` is set, a streaming response is also returned
-  - **Success Response**:
-    - Standard: `200 OK` - `MIPSolution` (JSON)
-    - Streaming: `200 OK` - `text/event-stream`. The stream consists of multiple events:
-      ```
-      event: log
-      data: {"ts":"...","level":"info","stage":"presolve","msg":"reading model","seq":1}
+## 3. Solver Wrapper Modifications
 
-      event: metric
-      data: {"ts":"...","obj":160.2,"gap":0.23,"iter":34,"seq":2}
+The `remip.solvers.scip_wrapper.ScipWrapper` will be responsible for populating these new fields in the `Solution` object.
 
-      event: result
-      data: {"ts":"...","status":"optimal","obj":158.0,"variables":{"x1":1,"x2":0},"runtime_ms":8976,"seq":3}
+### 3.1. Populating `mip_gap`
 
-      event: end
-      data: {"ok":true}
-      ```
-  - **Error Response**: `400 Bad Request`, `422 Unprocessable Entity`, `500 Internal Server Error`
+-   After solving a MIP, the `getGap()` method of the PySCIPOpt model object will be used to retrieve the MIP gap.
+-   This value will be passed to the `Solution` object.
 
-- **`GET /solver-info`**
-  - **Request Body**: None
-  - **Success Response**: `200 OK` - `{"solver": "SCIP", "version": "x.y.z"}`
+### 3.2. Populating `slacks`
+
+-   After a solution is found, iterate through the constraints of the PySCIPOpt model.
+-   For each constraint, the `getActivity()` method can be used to get the value of the constraint's expression.
+-   The slack can be calculated based on the activity and the left-hand side (LHS) and right-hand side (RHS) of the constraint.
+    -   For `LHS <= expr <= RHS`, slack for LHS is `activity - LHS`, and for RHS is `RHS - activity`.
+    -   We will need to decide on a consistent way to report slack for ranged constraints. A good approach is to provide the "violation" of the tightest bound.
+-   The constraint name and its slack value will be stored in the `slacks` dictionary.
+
+### 3.3. Populating `duals`
+
+-   This is applicable mainly for LP problems. After solving, we need to check if the problem is an LP.
+-   If it is an LP, we can use `getDualsol()` on the PySCIPOpt model object to get the dual values for the constraints.
+-   The `getDualsol` method requires a constraint object. We will iterate through the constraints and get their dual values.
+-   The constraint name and its dual value will be stored in the `duals` dictionary.
+-   If the problem is a MIP, this field will remain `None`. We might need to add a check `model.isMIP()`.
+
+### 3.4. Populating `reduced_costs`
+
+-   Similar to dual values, reduced costs are typically for LP problems.
+-   After solving an LP, we can use the `getReducedcost()` method on a variable object.
+-   We will iterate through the variables in the model and get their reduced costs.
+-   The variable name and its reduced cost will be stored in the `reduced_costs` dictionary.
+-   If the problem is a MIP, this field will remain `None`.
+
+## 4. API on `remip-client`
+
+The `remip-client` will also need to be updated to reflect these changes.
+
+-   The `remip_client.solver.Solution` data class will be updated to match the changes in `remip.models.Solution`.
+-   The client will then be able to deserialize the full solution object received from the `remip` server.
 
 ## 5. Error Handling
 
-### 5.1 Error Classification
+-   If a user tries to access duals or reduced costs for a MIP problem where they are not available, the API will return `None` for these fields. No exception will be raised. The client-side code should handle the `None` case.
 
-- **User Input Error (4xx)**: Invalid JSON, validation failure against `MIPProblem` schema, or unsupported problem features. Handled by FastAPI's default exception handling.
-- **Solver Error (5xx)**: The solver fails to start, crashes, or cannot find a solution due to internal issues. The API will return a `500 Internal Server Error` with a descriptive message.
-- **Infeasible/Unbounded Problem (200)**: These are valid solver outcomes, not errors. The status will be returned in the `MIPSolution` object.
+## 6. Implementation Plan
 
-### 5.2 Error Notification
-
-- Errors will be logged to `stderr` using Python's standard `logging` module.
-- HTTP responses will contain a `detail` key in the JSON body with a human-readable error message.
-
-## 6. Security Design
-
-### 6.1 Authentication & Authorization
-
-- No authentication or authorization is required for the initial version. The API is considered to be running in a trusted environment.
-
-### 6.2 Data Protection
-
-- **Input Validation**: Pydantic models provide robust validation of the incoming JSON structure and data types.
-- **Resource Limiting**: The web server (Uvicorn) will be configured with limits on request body size to prevent DoS attacks. The solver process will be run with a timeout to prevent runaway resource consumption.
-
-## 7. Test Design
-
-**For detailed test design, please run the `/test-design` command to create a test design document.**
-
-That document will define:
-- Test cases for normal, edge, and boundary conditions
-- Test data design
-- Performance and security testing
-- Automation strategy
-
-## 8. Performance Optimization
-
-### 8.1 Expected Load
-
-- The API should handle dozens of concurrent requests, with the primary bottleneck being the solver's CPU time, not the API itself.
-
-### 8.2 Optimization Strategy
-
-- **Asynchronous Execution**: All API endpoints will be `async` to handle I/O-bound operations (like reading requests and sending responses) efficiently.
-- **Process Isolation**: The MIP solver will be run in a separate subprocess using `asyncio.create_subprocess_exec` to prevent it from blocking the main FastAPI event loop. This ensures the server remains responsive to other requests while a problem is being solved.
-- **Efficient Streaming**: Server-Sent Events (SSE) will be used for log streaming, as it is a lightweight and efficient protocol for unidirectional server-to-client communication.
-
-## 9. Deployment
-
-### 9.1 Deployment Configuration
-
-- The application will be packaged into a Docker container.
-- Deployment will be managed via a simple `docker-compose.yml` file for local development and testing.
-- For production, a more robust container orchestration system like Kubernetes could be used.
-
-### 9.2 Configuration Management
-
-- Application settings (e.g., solver path, timeouts, logging level) will be managed using Pydantic's `BaseSettings`, which can read from environment variables. This avoids hardcoding configuration into the source code.
-
-## 10. Implementation Notes
-
-- **Solver Interface**: A wrapper class will be created to abstract the command-line interface of the SCIP solver, making it easier to swap out solvers in the future if needed.
-- **Streaming Implementation**: We will use `fastapi.responses.StreamingResponse` with an `async` generator function to implement the SSE endpoint. The generator will read the solver's log output line by line and `yield` it to the client.
-- **Multiple Solvers**: The design will support multiple solvers. The specific solver can be chosen via an API parameter. The default will be SCIP.
-- **Solver-Specific Arguments**: The `solver_options` dictionary in the request will be used to pass command-line arguments to the solver executable. The application will need a mapping between the JSON keys and the solver's specific command-line flags.
+1.  Modify `remip.models.Solution` to include the new fields.
+2.  Update `remip.solvers.scip_wrapper.ScipWrapper` to populate the new fields from the PySCIPOpt model.
+3.  Modify `remip_client.solver.Solution` to mirror the server-side `Solution` model.
+4.  Add unit tests to verify that the new fields are populated correctly for both LP and MIP problems.

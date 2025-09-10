@@ -48,6 +48,19 @@ The API will be available at `http://localhost:8000`.
 - `POST /solve`: Submits a MIP problem. Returns the final solution as JSON. If the `stream=sse` query parameter is provided or the `Accept` header is `text/event-stream`, it streams solver events using Server-Sent Events (SSE).
 - `GET /solver-info`: Returns information about the configured solver.
 
+## Solution Object
+
+The solution object returned by the `/solve` endpoint contains the following fields:
+
+-   `name`: The name of the problem.
+-   `status`: The solution status (e.g., `optimal`, `infeasible`).
+-   `objective_value`: The objective value of the solution.
+-   `variables`: A dictionary of variable names and their values.
+-   `mip_gap`: The final MIP gap (for MIP problems).
+-   `slacks`: A dictionary of constraint names and their slack values.
+-   `duals`: A dictionary of constraint names and their dual values (for LP problems).
+-   `reduced_costs`: A dictionary of variable names and their reduced costs (for LP problems).
+
 ## Testing
 
 To run the test suite:

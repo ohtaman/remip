@@ -128,3 +128,32 @@ def test_solve_api_error(lp_problem, requests_mock):
     solver = ReMIPSolver()
     status = solver.solve(lp_problem)
     assert status == constants.LpStatusNotSolved
+
+
+def test_solve_with_enhancements(lp_problem, requests_mock):
+    solution = {
+        "name": "Test_Problem",
+        "status": "optimal",
+        "objective_value": 1.0,
+        "variables": {"x": 1.0},
+        "mip_gap": 0.001,
+        "slacks": {"c1": 0.0},
+        "duals": {"c1": -1.0},
+        "reduced_costs": {"x": 0.0},
+    }
+    requests_mock.post("http://localhost:8000/solve", json=solution)
+
+    solver = ReMIPSolver(stream=False)
+    status = solver.solve(lp_problem)
+    assert status == constants.LpStatusOptimal
+    assert lp_problem.objective.value == 1.0
+    assert lp_problem.variables()[0].varValue == 1.0
+
+    assert hasattr(lp_problem, "mip_gap")
+    assert lp_problem.mip_gap == 0.001
+    assert hasattr(lp_problem, "slacks")
+    assert lp_problem.slacks == {"c1": 0.0}
+    assert hasattr(lp_problem, "duals")
+    assert lp_problem.duals == {"c1": -1.0}
+    assert hasattr(lp_problem, "reduced_costs")
+    assert lp_problem.reduced_costs == {"x": 0.0}
