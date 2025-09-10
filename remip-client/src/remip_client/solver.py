@@ -117,4 +117,10 @@ class ReMIPSolver(LpSolver):
                 if var.name in solution["variables"]:
                     var.varValue = solution["variables"][var.name]
 
+            # Store additional solution information
+            lp.mip_gap = solution.get("mip_gap")
+            lp.slacks = solution.get("slacks")
+            lp.duals = solution.get("duals")
+            lp.reduced_costs = solution.get("reduced_costs")
+
         return lp.status

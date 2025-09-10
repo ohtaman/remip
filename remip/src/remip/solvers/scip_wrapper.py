@@ -203,15 +203,62 @@ class ScipSolverWrapper:
         status = model.getStatus()
         objective_value = None
         solution_vars = {}
+        mip_gap = None
+        slacks = {}
+        duals = {}
+        reduced_costs = {}
+
         if model.getNSols() > 0:
             objective_value = model.getObjVal()
             solution = model.getBestSol()
             for var_name, var in vars.items():
                 solution_vars[var_name] = solution[var]
 
+            # Check if the problem is a MIP
+            is_mip = any(v.category != "Continuous" for v in problem.variables)
+
+            if is_mip:
+                mip_gap = model.getGap()
+
+            # Get slacks
+            for const_data in problem.constraints:
+                if const_data.name:
+                    activity = 0
+                    for coeff in const_data.coefficients:
+                        if coeff.name in solution_vars:
+                            activity += solution_vars[coeff.name] * coeff.value
+
+                    rhs = 1e20
+                    lhs = -1e20
+
+                    if const_data.sense == -1:  # LEQ
+                        rhs = -const_data.constant if const_data.constant is not None else 0.0
+                    elif const_data.sense == 1:  # GEQ
+                        lhs = -const_data.constant if const_data.constant is not None else 0.0
+                    elif const_data.sense == 0:  # EQ
+                        rhs = -const_data.constant if const_data.constant is not None else 0.0
+                        lhs = rhs
+
+                    if rhs < 1e20:
+                        slacks[const_data.name] = rhs - activity
+                    elif lhs > -1e20:
+                        slacks[const_data.name] = activity - lhs
+
+            # Get duals and reduced costs for LPs
+            if not is_mip:
+                for c in model.getConss():
+                    if c.isLinear():
+                        duals[c.name] = model.getDualSolVal(c)
+                for v_name, v_obj in vars.items():
+                    reduced_costs[v_name] = model.getVarRedcost(v_obj)
+
         return MIPSolution(
             name=problem.parameters.name,
             status=status,
             objective_value=objective_value,
             variables=solution_vars,
+            mip_gap=mip_gap,
+            slacks=slacks if slacks else None,
+            duals=duals if duals else None,
+            reduced_costs=reduced_costs if reduced_costs else None,
         )
