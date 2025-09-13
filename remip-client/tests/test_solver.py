@@ -130,6 +130,22 @@ def test_solve_api_error(lp_problem, requests_mock):
     assert status == constants.LpStatusNotSolved
 
 
+def test_solve_with_timeout_sends_query_param(lp_problem, requests_mock):
+    """Tests that the timeout is sent as a query parameter."""
+    # Mock the endpoint, expecting the timeout parameter
+    requests_mock.post("http://localhost:8000/solve?stream=sse&timeout=60", json={})
+
+    # Initialize solver with a timeout
+    solver = ReMIPSolver(stream=True, timeout=60)
+    # We don't need to check the result, just that the correct URL was called
+    solver.solve(lp_problem)
+
+    # requests_mock will raise an error if the URL doesn't match, so no explicit assert is needed
+    # on the URL itself. We can assert it was called.
+    assert requests_mock.called
+    assert requests_mock.call_count == 1
+
+
 def test_solve_with_enhancements(lp_problem, requests_mock):
     solution = {
         "name": "Test_Problem",

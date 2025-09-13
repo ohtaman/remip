@@ -31,22 +31,27 @@ class ScipSolverWrapper:
         )
         self.seq = 0
 
-    async def solve(self, problem: MIPProblem) -> MIPSolution:
+    async def solve(self, problem: MIPProblem, timeout: Optional[float] = None) -> MIPSolution:
         """
         Solves a MIP problem by consuming the event stream and returning the final solution.
         """
         solution: Optional[MIPSolution] = None
 
-        async for event in self.solve_and_stream_events(problem):
+        async for event in self.solve_and_stream_events(problem, timeout=timeout):
             if isinstance(event, ResultEvent):
                 solution = event.solution
 
         if not solution:
-            raise Exception("Solver did not produce a result.")
+            # If no result event was sent (e.g., due to timeout before first solution),
+            # create a solution object with the appropriate status.
+            model, vars = await self._build_model(problem, timeout=timeout)
+            solution = self._extract_solution(model, problem, vars)
 
         return solution
 
-    async def solve_and_stream_events(self, problem: MIPProblem) -> AsyncGenerator[SolverEvent, None]:
+    async def solve_and_stream_events(
+        self, problem: MIPProblem, timeout: Optional[float] = None
+    ) -> AsyncGenerator[SolverEvent, None]:
         """
         Solves a MIP problem and streams structured SolverEvent objects.
         """
@@ -55,7 +60,7 @@ class ScipSolverWrapper:
 
         log_queue: asyncio.Queue[str] = asyncio.Queue()
         stop_event = threading.Event()
-        model, vars = await self._build_model(problem)
+        model, vars = await self._build_model(problem, timeout=timeout)
 
         # The solver runs in a separate thread to avoid blocking asyncio event loop
         solver_thread = threading.Thread(target=self._run_solver_in_thread, args=(model, log_queue, stop_event))
@@ -112,6 +117,7 @@ class ScipSolverWrapper:
             # Send captured output to log queue
             for line in captured_output:
                 if line.strip():
+                    # Use run_coroutine_threadsafe as this is called from a different thread
                     asyncio.run_coroutine_threadsafe(log_queue.put(line.strip()), asyncio.get_running_loop())
 
         stop_event.set()
@@ -138,9 +144,13 @@ class ScipSolverWrapper:
             return LogEvent(timestamp=ts, level="info", stage="presolve", message=line.strip())
         return None
 
-    async def _build_model(self, problem: MIPProblem) -> Tuple[Model, Dict[str, Any]]:
+    async def _build_model(self, problem: MIPProblem, timeout: Optional[float] = None) -> Tuple[Model, Dict[str, Any]]:
         """Builds a pyscipopt.Model instance from a MIPProblem definition."""
         model = Model(problem.parameters.name)
+
+        if timeout is not None and timeout > 0:
+            model.setParam("limits/time", timeout)
+
         vars = {}
         for var_data in problem.variables:
             vars[var_data.name] = model.addVar(
@@ -200,7 +210,20 @@ class ScipSolverWrapper:
 
     def _extract_solution(self, model: Model, problem: MIPProblem, vars: Dict[str, Any]) -> MIPSolution:
         """Extracts the MIPSolution from the solved pyscipopt.Model."""
-        status = model.getStatus()
+        status_map = {
+            "optimal": "optimal",
+            "infeasible": "infeasible",
+            "unbounded": "unbounded",
+            "timelimit": "timelimit",
+            "userinterrupt": "timelimit",  # Map interrupt to timelimit
+            "gaplimit": "gaplimit",
+            "solutionlimit": "solutionlimit",
+            "memorylimit": "memorylimit",
+            "nodelimit": "nodelimit",
+        }
+        raw_status = model.getStatus()
+        status = status_map.get(raw_status, "not solved")
+
         objective_value = None
         solution_vars = {}
         mip_gap = None

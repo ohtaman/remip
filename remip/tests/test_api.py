@@ -1,5 +1,5 @@
 import json
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,7 +18,7 @@ from remip.services import MIPSolverService
 
 
 class MockMIPSolverService(MIPSolverService):
-    async def solve(self, problem_data: MIPProblem) -> MIPSolution:
+    async def solve(self, problem_data: MIPProblem, timeout: Optional[float] = None) -> MIPSolution:
         return MIPSolution(
             name=problem_data.parameters.name,
             status="Optimal",
@@ -26,7 +26,9 @@ class MockMIPSolverService(MIPSolverService):
             variables={"x": 1.0},
         )
 
-    async def solve_stream(self, problem_data: MIPProblem) -> AsyncGenerator[SolverEvent, None]:
+    async def solve_stream(
+        self, problem_data: MIPProblem, timeout: Optional[float] = None
+    ) -> AsyncGenerator[SolverEvent, None]:
         yield LogEvent(
             type="log",
             timestamp="2025-01-01T00:00:00Z",

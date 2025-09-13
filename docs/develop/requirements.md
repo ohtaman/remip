@@ -1,51 +1,38 @@
-# Requirements for Solution Enhancements
+# Requirements: Solver Timeout
 
 ## 1. Overview
 
-This document outlines the requirements for enhancing the solution object to include additional information from the solver. The goal is to provide users with more insights into the solution quality and the model's characteristics.
-
-The following attributes should be added to the solution:
-
--   MIP Gap
--   Constraint Slacks
--   Dual Values
--   Reduced Costs
+The `remip` solver can sometimes take a long time to find a solution for complex optimization problems. To prevent indefinite runs and to allow users to control the maximum execution time, a timeout mechanism is required. This feature will allow users to specify a maximum duration for the solver to run.
 
 ## 2. Functional Requirements
 
-### 2.1. MIP Gap
+### 2.1. Timeout Parameter
 
--   The solution object should contain the final MIP gap of the optimization process.
--   The MIP gap should be a floating-point number.
--   If the problem is not a MIP, the MIP gap should be 0.0 or not applicable.
+- The solver will accept a `timeout` parameter, specified in seconds.
+- This parameter will be optional.
+- If the `timeout` parameter is not provided, the solver will run without a time limit, preserving the current default behavior.
 
-### 2.2. Constraint Slacks
+### 2.2. Solver Behavior
 
--   The solution object should provide a way to access the slack value for each constraint.
--   This could be a dictionary or a similar data structure mapping constraint names (or IDs) to their slack values.
--   Slack values should be floating-point numbers.
-
-### 2.3. Dual Values (Shadow Prices)
-
--   The solution object should provide access to the dual values (shadow prices) for each constraint.
--   This should be a dictionary or a similar data structure mapping constraint names (or IDs) to their dual values.
--   Dual values are typically available for Linear Programs (LPs) only. The implementation should handle cases where dual values are not available (e.g., for MIPs). In such cases, it could return an empty dictionary or raise an informative error.
--   Dual values should be floating-point numbers.
-
-### 2.4. Reduced Costs
-
--   The solution object should provide access to the reduced costs for each variable.
--   This should be a dictionary or a similar data structure mapping variable names (or IDs) to their reduced costs.
--   Reduced costs are typically available for Linear Programs (LPs) only. The implementation should handle cases where reduced costs are not available (e.g., for MIPs).
--   Reduced costs should be floating-point numbers.
+- When the `timeout` is specified, the solver process must terminate if the execution time exceeds the given value.
+- If the solver terminates due to a timeout, it should return a specific status indicating that the timeout was reached.
+- If a feasible (but not necessarily optimal) solution is found before the timeout occurs, the solver should return the best solution found so far.
 
 ## 3. Non-Functional Requirements
 
--   **Performance:** The additional data should be retrieved from the solver efficiently without significantly impacting the overall solution time.
--   **API Clarity:** The new attributes on the solution object should be well-documented and easy to use.
--   **Error Handling:** The system should gracefully handle cases where the requested information is not available from the solver for a particular problem type (e.g., requesting dual values for a MIP).
+### 3.1. API Integration
+
+- The `timeout` parameter must be integrated into the server's API endpoint for solving optimization problems.
+- The `remip-client` library must be updated to support passing the `timeout` parameter to the server.
+
+### 3.2. Error Handling
+
+- If an invalid value is provided for the timeout (e.g., a negative number), the API should return a validation error.
+
+### 3.3. User Experience
+
+- The client should receive a clear message indicating that the solver stopped because the timeout was reached.
 
 ## 4. Out of Scope
 
--   Any changes to the modeling part of the API.
--   Support for solver-specific parameters not directly related to these solution attributes.
+- This feature will not include support for pausing and resuming the solver.

@@ -1,82 +1,65 @@
-# Test Design for Solution Enhancements
+# Test Design: Server-Side Solver Timeout
 
 ## 1. Overview
 
-This document outlines the testing strategy for the new solution enhancement features: MIP gap, constraint slacks, dual values, and reduced costs. The tests will ensure that these features are implemented correctly and that they perform as expected.
+This document outlines the testing strategy for the server-side solver timeout feature, based on the final approved design. The tests will validate that the `timeout` is correctly passed as a URL query parameter and that the server enforces the timeout correctly.
 
-The tests will be added to the existing test suites in `remip/tests` and `remip-client/tests`.
+## 2. `remip-client` Unit Tests
 
-## 2. Unit Tests for `remip`
+**Location**: `remip-client/tests/test_solver.py`
 
-### 2.1. `test_models.py`
+### Test Case: `test_solve_with_timeout_sends_query_param`
 
--   **Test Solution Model:**
-    -   Verify that the `Solution` model can be instantiated with the new fields (`mip_gap`, `slacks`, `duals`, `reduced_costs`).
-    -   Test serialization and deserialization of the `Solution` model to ensure the new fields are correctly handled.
+- **Objective**: Verify that the `timeout` value set on the `ReMIPSolver` instance is correctly sent as a query parameter in the API request.
+- **Setup**:
+    1.  Instantiate `ReMIPSolver` with a timeout value, e.g., `solver = ReMIPSolver(timeout=60)`.
+    2.  Use `requests_mock` to intercept the `POST` request.
+- **Action**:
+    1.  Call `solver.solve()` on a sample PuLP problem.
+- **Assertions**:
+    1.  Verify that the URL the request was sent to includes the `timeout` query parameter (e.g., `http://localhost:8000/solve?stream=sse&timeout=60`).
 
-### 2.2. `test_solver_wrapper.py`
+## 3. `remip` Integration Tests
 
-This file will contain the bulk of the new tests. We will need to create specific test cases for LP and MIP problems to verify the correctness of the new solution attributes.
+**Location**: `remip/tests/test_timeout.py` (a new file)
 
--   **MIP Problem Tests:**
-    -   Create a simple MIP problem.
-    -   Solve the problem and check that the `Solution` object is returned.
-    -   **Test `mip_gap`:** Assert that `solution.mip_gap` is a float and has a reasonable value (e.g., close to 0 if the problem is solved to optimality).
-    -   **Test `slacks`:** Assert that `solution.slacks` is a dictionary and contains correct slack values for the constraints.
-    -   **Test `duals` and `reduced_costs` for MIP:** Assert that `solution.duals` and `solution.reduced_costs` are `None` for a MIP problem.
+These end-to-end tests will use a real `TestClient` without a mocked service to ensure the entire workflow, including the server-side watchdog, functions correctly.
 
--   **LP Problem Tests:**
-    -   Create a simple LP problem.
-    -   Solve the problem and check that the `Solution` object is returned.
-    -   **Test `mip_gap` for LP:** Assert that `solution.mip_gap` is `None` or 0.0 for an LP problem.
-    -   **Test `slacks`:** Assert that `solution.slacks` is a dictionary and contains correct slack values for the constraints.
-    -   **Test `duals`:** Assert that `solution.duals` is a dictionary and contains the correct dual values for the constraints. We will need to manually calculate the expected duals for the simple LP.
-    -   **Test `reduced_costs`:** Assert that `solution.reduced_costs` is a dictionary and contains the correct reduced costs for the variables. We will need to manually calculate the expected reduced costs.
+### Test Setup
 
--   **Infeasible Problem Tests:**
-    -   Create an infeasible problem.
-    -   Verify that the solver returns a solution with a status of "infeasible" and that the new attributes are handled gracefully (e.g., they are `None`).
+- A helper function will be created to generate a knapsack-style integer programming problem, which can be scaled to be time-consuming.
+- The `TestClient` will be instantiated without overriding the `get_solver_service` dependency.
 
-## 3. Unit Tests for `remip-client`
+### Test Case: `test_solve_with_timeout_triggers`
 
-### 3.1. `test_solver.py`
+- **Objective**: Verify that the solver terminates early and returns a `timelimit` status when the timeout is reached.
+- **Setup**:
+    1.  Construct a knapsack problem that takes several seconds to solve.
+- **Action**:
+    1.  Send a `POST` request to the `/solve?timeout=1` endpoint with the problem in the request body.
+- **Assertions**:
+    1.  The HTTP status code must be `200`.
+    2.  The `status` field in the JSON response must be `"timelimit"`.
 
--   **Test `Solution` data class:**
-    -   Verify that the `remip_client.solver.Solution` data class includes the new fields.
--   **Test Deserialization:**
-    -   Create a sample JSON response from the `remip` server that includes the new fields.
-    -   Test that the `remip-client` can correctly deserialize this JSON into a `Solution` object.
-    -   Assert that the values of the new fields are correct after deserialization.
+### Test Case: `test_solve_without_timeout_completes_optimally`
 
-## 4. Test Cases Details
+- **Objective**: Ensure the solver runs to completion when no timeout is specified.
+- **Setup**:
+    1.  Use the same knapsack problem.
+- **Action**:
+    1.  Send a `POST` request to the `/solve` endpoint (with no query parameter).
+- **Assertions**:
+    1.  The HTTP status code must be `200`.
+    2.  The `status` field in the JSON response must be `"optimal"`.
 
-### 4.1. Simple LP Problem
+### Test Case: `test_solve_with_invalid_timeout_returns_error`
 
--   **Objective:** Maximize `x + 2y`
--   **Constraints:**
-    -   `c1: -x + y <= 1`
-    -   `c2: x + y <= 2`
--   **Bounds:** `x >= 0`, `y >= 0`
--   **Expected Solution:** `x=0.5`, `y=1.5`, objective = 3.5
--   **Expected Duals:** `dual(c1)=0.5`, `dual(c2)=1.5`
--   **Expected Reduced Costs:** `rc(x)=0`, `rc(y)=0`
--   **Expected Slacks:** `slack(c1)=0`, `slack(c2)=0`
+- **Objective**: Verify that the API validation for the `timeout` parameter works correctly.
+- **Setup**:
+    1.  Use any valid problem payload.
+- **Action**:
+    1.  Send a `POST` request to the `/solve?timeout=-5` endpoint.
+- **Assertions**:
+    1.  The HTTP status code must be `422 Unprocessable Entity`, as the `timeout` must be greater than or equal to 0.
 
-### 4.2. Simple MIP Problem
-
--   **Objective:** Maximize `x + 2y`
--   **Constraints:**
-    -   `c1: -x + y <= 1`
-    -   `c2: x + y <= 2`
--   **Bounds:** `x >= 0`, `y >= 0`
--   **Variable Types:** `x` is integer.
--   **Expected Solution:** `x=0`, `y=1`, objective = 2 (or `x=1, y=1`, obj=3, or `x=2, y=0`, obj=2 - need to check what SCIP does)
-    *Let's assume for the test `x=1, y=1`, obj=3.*
--   **Expected MIP Gap:** Should be close to 0.0 if solved to optimality.
--   **Expected Slacks:** `slack(c1)=0`, `slack(c2)=0`
--   **Expected Duals:** `None`
--   **Expected Reduced Costs:** `None`
-
-## 5. Manual Testing
-
--   After the implementation and automated tests are complete, a manual test with a more complex model could be performed to ensure everything works as expected in a more realistic scenario. However, for this feature, strong unit tests are the priority.
+This test plan ensures that the client correctly formats the request, the API validates the input, and the server-side timeout logic is robust and effective.

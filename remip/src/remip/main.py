@@ -1,9 +1,10 @@
 import argparse
 import logging
 import socket
+from typing import Optional
 
 import uvicorn
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import StreamingResponse
@@ -36,7 +37,12 @@ async def health():
 
 
 @app.post("/solve")
-async def solve(request: Request, problem: MIPProblem, service: MIPSolverService = Depends(get_solver_service)):
+async def solve(
+    request: Request,
+    problem: MIPProblem,
+    service: MIPSolverService = Depends(get_solver_service),
+    timeout: Optional[float] = Query(None, ge=0, description="Maximum solver time in seconds"),
+):
     """
     Solves a MIP problem and returns the solution.
     If the 'stream' query parameter is set to 'sse' or the 'Accept' header is 'text/event-stream',
@@ -50,13 +56,13 @@ async def solve(request: Request, problem: MIPProblem, service: MIPSolverService
     if is_streaming_request:
 
         async def event_generator():
-            async for event in service.solve_stream(problem):
+            async for event in service.solve_stream(problem, timeout=timeout):
                 yield f"event: {event.type}\n"
                 yield f"data: {event.model_dump_json()}\n\n"
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
     else:
-        solution = await service.solve(problem)
+        solution = await service.solve(problem, timeout=timeout)
         return solution
 
 

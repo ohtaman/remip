@@ -18,10 +18,13 @@ class ReMIPSolver(LpSolver):
     Works in both CPython and Pyodide environments.
     """
 
-    def __init__(self, base_url="http://localhost:8000", stream=True, **kwargs):
+    def __init__(
+        self, base_url="http://localhost:8000", stream=True, timeout=None, **kwargs
+    ):
         super().__init__(**kwargs)
         self.base_url = base_url
         self.stream = stream
+        self.timeout = timeout
 
     def actualSolve(self, lp: LpProblem) -> int:
         """
@@ -37,21 +40,30 @@ class ReMIPSolver(LpSolver):
         solution = None
 
         try:
+            url = f"{self.base_url}/solve"
+            params = {}
+            if self.stream:
+                params["stream"] = "sse"
+            if self.timeout is not None:
+                params["timeout"] = self.timeout
+
             if not self.stream:
                 # Non-streaming case
                 response = requests.post(
-                    f"{self.base_url}/solve",
+                    url,
+                    params=params,
                     json=problem_dict,
-                    timeout=None,
+                    timeout=None,  # This is the client-side request timeout, not the solver timeout
                 )
                 response.raise_for_status()
                 solution = response.json()
             else:
                 # Streaming case
                 response = requests.post(
-                    f"{self.base_url}/solve?stream=sse",
+                    url,
+                    params=params,
                     json=problem_dict,
-                    timeout=None,
+                    timeout=None,  # This is the client-side request timeout, not the solver timeout
                     stream=True,
                 )
                 response.raise_for_status()
