@@ -118,7 +118,7 @@ class ReMIPSolver(LpSolver):
             "infeasible": constants.LpStatusInfeasible,
             "unbounded": constants.LpStatusUnbounded,
             "not solved": constants.LpStatusNotSolved,
-            "timelimit": constants.LpStatusNotSolved,
+            "timeout": constants.LpStatusNotSolved,
         }
         lp.status = status_map.get(solution["status"], constants.LpStatusUndefined)
         if solution.get("objective_value") is not None:

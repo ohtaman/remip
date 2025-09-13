@@ -32,7 +32,7 @@ These end-to-end tests will use a real `TestClient` without a mocked service to 
 
 ### Test Case: `test_solve_with_timeout_triggers`
 
-- **Objective**: Verify that the solver terminates early and returns a `timelimit` status when the timeout is reached.
+- **Objective**: Verify that the solver terminates early and returns a `timeout` status when the timeout is reached.
 - **Setup**:
     1.  Construct a knapsack problem that takes several seconds to solve.
 - **Action**:

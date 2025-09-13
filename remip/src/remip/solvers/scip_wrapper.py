@@ -211,8 +211,8 @@ class ScipSolverWrapper:
             "optimal": "optimal",
             "infeasible": "infeasible",
             "unbounded": "unbounded",
-            "timelimit": "timelimit",
-            "userinterrupt": "timelimit",  # Map interrupt to timelimit
+            "timelimit": "timeout",
+            "userinterrupt": "timeout",  # Map interrupt to timeout
             "gaplimit": "gaplimit",
             "solutionlimit": "solutionlimit",
             "memorylimit": "memorylimit",

@@ -23,7 +23,7 @@ This document breaks down the implementation of the server-side timeout feature 
     -   **File**: `remip/src/remip/solvers/scip_wrapper.py`
     -   **Action**: Update the signatures of `solve` and `solve_and_stream_events` to accept the `timeout: Optional[float]` parameter.
     -   **Action**: In `solve_and_stream_events`, if `timeout` is provided, create and manage an `asyncio` watchdog task that calls `model.interruptSolve()` after the specified duration.
-    -   **Action**: In `_extract_solution`, check for the `"userinterrupt"` status from the solver and map it to `"timelimit"` in the returned `MIPSolution`.
+    -   **Action**: In `_extract_solution`, check for the `"userinterrupt"` status from the solver and map it to `"timeout"` in the returned `MIPSolution`.
 
 ## 3. Client-Side Implementation (`remip-client`)
 
