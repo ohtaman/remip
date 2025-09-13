@@ -40,7 +40,7 @@ The request body must be a JSON object representing the MIP problem, conforming 
 
 **Query Parameters**:
 
--   `timeout` (float, optional): The maximum time in seconds that the solver is allowed to run. If the time limit is reached, the solver will be interrupted, and the best solution found so far will be returned with a `"timelimit"` status.
+-   `timeout` (float, optional): The maximum time in seconds that the solver is allowed to run. If the time limit is reached, the solver will be interrupted, and the best solution found so far will be returned with a `"timeout"` status.
 -   `stream` (string, optional): If set to `sse`, the server will stream solver events (logs, metrics, and results) using Server-Sent Events. This is useful for monitoring long-running tasks.
 
 **Responses**:

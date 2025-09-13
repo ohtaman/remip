@@ -81,7 +81,7 @@ This document outlines the final technical design for implementing a server-side
 - The `solve_and_stream_events` method will accept the `timeout` value.
 - If a timeout is provided, an `asyncio` watchdog task will be started. This task will sleep for the specified duration.
 - If the watchdog's sleep completes before the solver finishes, it will call `model.interruptSolve()` in a thread-safe manner to gracefully stop the optimization process.
-- The `_extract_solution` method will check the solver status. If the status is `"userinterrupt"` (the result of calling `interruptSolve()`), it will be mapped to our application's `"timelimit"` status in the final `MIPSolution`.
+- The `_extract_solution` method will check the solver status. If the status is `"userinterrupt"` (the result of calling `interruptSolve()`), it will be mapped to our application's `"timeout"` status in the final `MIPSolution`.
 
 ## 3. Data Flow Example
 
@@ -91,5 +91,5 @@ This document outlines the final technical design for implementing a server-side
 4.  The `timeout` value is passed through the service layer to the `ScipSolverWrapper`.
 5.  The wrapper starts the solver in a background thread and concurrently starts a 60-second watchdog timer.
 6.  If 60 seconds pass, the watchdog interrupts the solver.
-7.  The wrapper catches the interruption, checks the solver status (`"userinterrupt"`), and creates a `MIPSolution` with `"status": "timelimit"`.
+7.  The wrapper catches the interruption, checks the solver status (`"userinterrupt"`), and creates a `MIPSolution` with `"status": "timeout"`.
 8.  The server sends this solution back to the client.

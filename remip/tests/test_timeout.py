@@ -131,5 +131,5 @@ def test_solve_with_timeout_triggers(real_solver_client, tsptw_problem):
     response = real_solver_client.post("/solve?timeout=1", json=tsptw_problem)
     assert response.status_code == 200
     solution = response.json()
-    # The status should be 'timelimit' because the solver was interrupted
-    assert solution["status"] == "timelimit"
+    # The status should be 'timeout' because the solver was interrupted
+    assert solution["status"] == "timeout"
