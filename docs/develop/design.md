@@ -1,100 +1,95 @@
-# Design for Solution Enhancements
+# Final Technical Design: Server-Side Solver Timeout
 
 ## 1. Overview
 
-This document provides the technical design for incorporating MIP gap, constraint slacks, dual values, and reduced costs into the solution object. This design is based on the approved requirements.
+This document outlines the final technical design for implementing a server-side solver timeout. This design has been refined based on feedback to ensure a clean separation between the problem definition and solver control parameters. The timeout will be managed by the `remip` server and passed as a URL query parameter in API requests.
 
-The primary changes will be in the `remip.models.Solution` class and the solver wrapper (`remip.solvers.scip_wrapper.ScipWrapper`) that creates the `Solution` object.
+## 2. Proposed Changes
 
-## 2. Data Model Changes
+### 2.1. `remip-client` (`remip-client/src/remip_client/solver.py`)
 
-The `remip.models.Solution` class will be extended to include the new attributes.
+- **`ReMIPSolver.__init__`**: The constructor will be updated to accept a `timeout` parameter, which will be stored on the instance.
+  ```python
+  def __init__(self, base_url="http://localhost:8000", stream=True, timeout=None, **kwargs):
+      super().__init__(**kwargs)
+      self.base_url = base_url
+      self.stream = stream
+      self.timeout = timeout
+  ```
 
-```python
-# In remip/models.py
+- **`ReMIPSolver.solve`**: The request URL will be dynamically constructed to include the `timeout` as a query parameter if it has been set. This will apply to both streaming and non-streaming requests.
 
-from typing import Dict, Optional
-from pydantic import BaseModel
+  ```python
+  # Example modification in solve method
+  url = f"{self.base_url}/solve"
+  params = {}
+  if self.stream:
+      params['stream'] = 'sse'
+  if self.timeout is not None:
+      params['timeout'] = self.timeout
 
-# ... existing Solution class ...
+  response = requests.post(
+      url,
+      params=params,
+      json=problem_dict,
+      # ...
+  )
+  ```
 
-class Solution(BaseModel):
-    # ... existing fields ...
-    mip_gap: Optional[float] = None
-    slacks: Optional[Dict[str, float]] = None
-    duals: Optional[Dict[str, float]] = None
-    reduced_costs: Optional[Dict[str, float]] = None
+### 2.2. `remip` Server
 
-```
+#### 2.2.1. API Endpoint (`remip/src/remip/main.py`)
 
-### 2.1. `mip_gap`
+- The `/solve` endpoint will be updated to accept an optional `timeout` float value from a query parameter. FastAPI's `Query` will be used to add validation (e.g., must be greater than or equal to zero).
 
--   A `float` to store the MIP gap.
--   It will be `None` if not applicable (e.g., for LPs).
+  ```python
+  from fastapi import Depends, FastAPI, Query, Request
 
-### 2.2. `slacks`
+  # ...
 
--   A dictionary mapping constraint names (`str`) to their slack values (`float`).
--   `None` if not computed or not applicable.
+  @app.post("/solve")
+  async def solve(
+      request: Request,
+      problem: MIPProblem,
+      service: MIPSolverService = Depends(get_solver_service),
+      timeout: Optional[float] = Query(None, ge=0, description="Maximum solver time in seconds")
+  ):
+      # ... pass timeout to service layer
+  ```
 
-### 2.3. `duals`
+#### 2.2.2. Model (`remip/src/remip/models.py`)
 
--   A dictionary mapping constraint names (`str`) to their dual values (`float`).
--   `None` if not available (e.g., for MIPs).
+- **No changes** will be made to the `MIPProblem` model, keeping it clean of solver-specific control parameters.
 
-### 2.4. `reduced_costs`
+#### 2.2.3. Service Layer (`remip/src/remip/services.py`)
 
--   A dictionary mapping variable names (`str`) to their reduced costs (`float`).
--   `None` if not available (e.g., for MIPs).
+- The service methods will be updated to accept the `timeout` and pass it down to the solver wrapper.
 
-## 3. Solver Wrapper Modifications
+  ```python
+  # Example modification in MIPSolverService
+  async def solve(self, problem_data: MIPProblem, timeout: Optional[float] = None) -> MIPSolution:
+      return await self.solver.solve(problem_data, timeout=timeout)
 
-The `remip.solvers.scip_wrapper.ScipWrapper` will be responsible for populating these new fields in the `Solution` object.
+  async def solve_stream(self, problem_data: MIPProblem, timeout: Optional[float] = None) -> AsyncGenerator[SolverEvent, None]:
+      async for event in self.solver.solve_and_stream_events(problem_data, timeout=timeout):
+          yield event
+  ```
 
-### 3.1. Populating `mip_gap`
+#### 2.2.4. Solver Wrapper (`remip/src/remip/solvers/scip_wrapper.py`)
 
--   After solving a MIP, the `getGap()` method of the PySCIPOpt model object will be used to retrieve the MIP gap.
--   This value will be passed to the `Solution` object.
+- The core server-side timeout logic will be implemented here.
+- The `solve_and_stream_events` method will accept the `timeout` value.
+- If a timeout is provided, an `asyncio` watchdog task will be started. This task will sleep for the specified duration.
+- If the watchdog's sleep completes before the solver finishes, it will call `model.interruptSolve()` in a thread-safe manner to gracefully stop the optimization process.
+- The `_extract_solution` method will check the solver status. If the status is `"userinterrupt"` (the result of calling `interruptSolve()`), it will be mapped to our application's `"timelimit"` status in the final `MIPSolution`.
 
-### 3.2. Populating `slacks`
+## 3. Data Flow Example
 
--   After a solution is found, iterate through the constraints of the PySCIPOpt model.
--   For each constraint, the `getActivity()` method can be used to get the value of the constraint's expression.
--   The slack can be calculated based on the activity and the left-hand side (LHS) and right-hand side (RHS) of the constraint.
-    -   For `LHS <= expr <= RHS`, slack for LHS is `activity - LHS`, and for RHS is `RHS - activity`.
-    -   We will need to decide on a consistent way to report slack for ranged constraints. A good approach is to provide the "violation" of the tightest bound.
--   The constraint name and its slack value will be stored in the `slacks` dictionary.
-
-### 3.3. Populating `duals`
-
--   This is applicable mainly for LP problems. After solving, we need to check if the problem is an LP.
--   If it is an LP, we can use `getDualsol()` on the PySCIPOpt model object to get the dual values for the constraints.
--   The `getDualsol` method requires a constraint object. We will iterate through the constraints and get their dual values.
--   The constraint name and its dual value will be stored in the `duals` dictionary.
--   If the problem is a MIP, this field will remain `None`. We might need to add a check `model.isMIP()`.
-
-### 3.4. Populating `reduced_costs`
-
--   Similar to dual values, reduced costs are typically for LP problems.
--   After solving an LP, we can use the `getReducedcost()` method on a variable object.
--   We will iterate through the variables in the model and get their reduced costs.
--   The variable name and its reduced cost will be stored in the `reduced_costs` dictionary.
--   If the problem is a MIP, this field will remain `None`.
-
-## 4. API on `remip-client`
-
-The `remip-client` will also need to be updated to reflect these changes.
-
--   The `remip_client.solver.Solution` data class will be updated to match the changes in `remip.models.Solution`.
--   The client will then be able to deserialize the full solution object received from the `remip` server.
-
-## 5. Error Handling
-
--   If a user tries to access duals or reduced costs for a MIP problem where they are not available, the API will return `None` for these fields. No exception will be raised. The client-side code should handle the `None` case.
-
-## 6. Implementation Plan
-
-1.  Modify `remip.models.Solution` to include the new fields.
-2.  Update `remip.solvers.scip_wrapper.ScipWrapper` to populate the new fields from the PySCIPOpt model.
-3.  Modify `remip_client.solver.Solution` to mirror the server-side `Solution` model.
-4.  Add unit tests to verify that the new fields are populated correctly for both LP and MIP problems.
+1.  A user calls `ReMIPSolver(timeout=60).solve(problem)`.
+2.  The client sends a `POST` request to `http://localhost:8000/solve?timeout=60`.
+3.  The server's `/solve` endpoint receives the request, extracting the `MIPProblem` from the body and the `timeout` from the query parameters.
+4.  The `timeout` value is passed through the service layer to the `ScipSolverWrapper`.
+5.  The wrapper starts the solver in a background thread and concurrently starts a 60-second watchdog timer.
+6.  If 60 seconds pass, the watchdog interrupts the solver.
+7.  The wrapper catches the interruption, checks the solver status (`"userinterrupt"`), and creates a `MIPSolution` with `"status": "timelimit"`.
+8.  The server sends this solution back to the client.

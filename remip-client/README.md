@@ -63,10 +63,11 @@ prob.solve(streaming_solver)
 ### Customizing Server Configuration
 
 ```python
-# Initialize solver with custom server URL
+# Initialize solver with custom server URL and a 120-second timeout
 solver = ReMIPSolver(
-    server_url="http://your-remip-server:8000",
-    stream=False
+    base_url="http://your-remip-server:8000",
+    stream=False,
+    timeout=120
 )
 ```
 
@@ -97,8 +98,9 @@ A PuLP-compatible solver class for communicating with the ReMIP server.
 
 #### Parameters
 
-- `server_url` (str, optional): URL of the ReMIP server. Defaults to `"http://localhost:8000"`
+- `base_url` (str, optional): URL of the ReMIP server. Defaults to `"http://localhost:8000"`
 - `stream` (bool, optional): Whether to enable streaming mode. Defaults to `True`
+- `timeout` (float, optional): The maximum time in seconds for the solver to run. Defaults to `None` (no time limit).
 
 #### Methods
 

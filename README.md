@@ -129,8 +129,8 @@ print(f"Status: {LpStatus[prob.status]}")
 for v in prob.variables():
     print(f"{v.name} = {v.varValue}")
 
-# 5. To get a stream of solver events, set stream=True
-streaming_solver = ReMIPSolver(stream=True)
+# 5. To get a stream of solver events and set a 60-second timeout
+streaming_solver = ReMIPSolver(stream=True, timeout=60)
 
 # The client will print log and metric events to the console
 prob.solve(streaming_solver)
