@@ -42,10 +42,8 @@ class ScipSolverWrapper:
                 solution = event.solution
 
         if not solution:
-            # If no result event was sent (e.g., due to timeout before first solution),
-            # create a solution object with the appropriate status.
-            model, vars = await self._build_model(problem, timeout=timeout)
-            solution = self._extract_solution(model, problem, vars)
+        if not solution:
+            raise Exception("Solver did not produce a result.")
 
         return solution
 
