@@ -42,7 +42,6 @@ class ScipSolverWrapper:
                 solution = event.solution
 
         if not solution:
-        if not solution:
             raise Exception("Solver did not produce a result.")
 
         return solution
