@@ -55,6 +55,16 @@ class ScipSolverWrapper:
         self.seq = 0
         start_time = time.time()
 
+        # Yield an initial event to ensure headers are sent quickly
+        self.seq += 1
+        yield LogEvent(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            level="info",
+            stage="start",
+            message="Solver process started.",
+            sequence=self.seq,
+        )
+
         log_queue: asyncio.Queue[str] = asyncio.Queue()
         stop_event = threading.Event()
         model, vars = await self._build_model(problem, timeout=timeout)
