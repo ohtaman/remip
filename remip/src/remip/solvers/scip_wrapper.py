@@ -22,6 +22,12 @@ class ScipSolverWrapper:
     """
     A wrapper for the pyscipopt library that provides solving capabilities and
     streams structured SSE events.
+
+    Simplifications:
+      - Uses SCIP's `redirectOutput()` to stream logs in real time.
+      - No setLogfile() / file tailing.
+      - One worker thread runs SCIP; it forwards lines into an asyncio.Queue
+        via `loop.call_soon_threadsafe(queue.put_nowait, line)`.
     """
 
     def __init__(self):
@@ -29,11 +35,12 @@ class ScipSolverWrapper:
         self.metric_regex = re.compile(
             r"\s*(\d+\.\d+)\s*\|\s*\d+\s*\|\s*\d+\s*\|\s*(\d+)\s*\|.*\|\s*([\d\.\-inf]+)\s*\|\s*([\d\.\-inf]+)\s*\|\s*([\d\.\-inf]+)"
         )
-        self.seq = 0
+        self.log_sequence = 0
 
     async def solve(self, problem: MIPProblem, timeout: Optional[float] = None) -> MIPSolution:
         """
         Solves a MIP problem by consuming the event stream and returning the final solution.
+        Only the final best solution (at completion or time limit) is returned.
         """
         solution: Optional[MIPSolution] = None
 
@@ -52,84 +59,140 @@ class ScipSolverWrapper:
         """
         Solves a MIP problem and streams structured SolverEvent objects.
         """
-        self.seq = 0
+        self.log_sequence = 0
         start_time = time.time()
 
         # Yield an initial event to ensure headers are sent quickly
-        self.seq += 1
+        self.log_sequence += 1
         yield LogEvent(
             timestamp=datetime.now(timezone.utc).isoformat(),
             level="info",
             stage="start",
             message="Solver process started.",
-            sequence=self.seq,
+            sequence=self.log_sequence,
         )
 
         log_queue: asyncio.Queue[str] = asyncio.Queue()
         stop_event = threading.Event()
         model, vars = await self._build_model(problem, timeout=timeout)
 
-        # The solver runs in a separate thread to avoid blocking asyncio event loop
-        solver_thread = threading.Thread(target=self._run_solver_in_thread, args=(model, log_queue, stop_event))
+        # Run SCIP in a separate thread (non-blocking for the asyncio loop)
+        loop = asyncio.get_running_loop()
+        solver_thread = threading.Thread(
+            target=self._run_solver_in_thread,
+            args=(model, log_queue, stop_event, loop, timeout),
+            daemon=True,
+        )
         solver_thread.start()
 
         # Process logs from the queue until the solver is finished
         while not stop_event.is_set() or not log_queue.empty():
             try:
                 log_line = await asyncio.wait_for(log_queue.get(), timeout=0.1)
-                event = self._parse_log_line(log_line)
+                event = self._parse_log_line(log_line, self.log_sequence)
                 if event:
-                    self.seq += 1
-                    event.sequence = self.seq
                     yield event
+                    self.log_sequence += 1
             except asyncio.TimeoutError:
                 continue
 
         solver_thread.join()
         runtime_ms = int((time.time() - start_time) * 1000)
 
-        # Yield the final result event
+        # Yield the final result event (best solution only)
         solution = self._extract_solution(model, problem, vars)
-        self.seq += 1
+        self.log_sequence += 1
         yield ResultEvent(
             timestamp=datetime.now(timezone.utc).isoformat(),
             solution=solution,
             runtime_milliseconds=runtime_ms,
-            sequence=self.seq,
+            sequence=self.log_sequence,
         )
 
         # Yield the end event
         yield EndEvent(success=True)
 
-    def _run_solver_in_thread(self, model: Model, log_queue: asyncio.Queue, stop_event: threading.Event):
-        """Target function for the solver thread."""
+    def _run_solver_in_thread(
+        self,
+        model: Model,
+        log_queue: asyncio.Queue,
+        stop_event: threading.Event,
+        loop: asyncio.AbstractEventLoop,
+        timeout: Optional[float],
+    ):
+        """
+        Worker thread target:
+          - Redirect SCIP output into Python.
+          - Replace stdout/stderr with a line-buffering writer that forwards lines
+            to the main asyncio loop (queue.put_nowait).
+          - Optionally set a time limit via SCIP param (simple approach).
+        """
+        import threading
+        from contextlib import redirect_stderr, redirect_stdout
 
-        # In the latest version of PySCIPOpt, setMessagehdlr is not available,
-        # so we capture standard output to get logs instead
-        import sys
-        from io import StringIO
+        # Ensure SCIP logs go to Python instead of terminal
+        try:
+            model.redirectOutput()
+        except Exception:
+            # If unavailable on this build, logs may still go to stdout; our redirect_* will capture them.
+            pass
 
-        # Capture standard output
-        old_stdout = sys.stdout
-        captured_output = StringIO()
-        sys.stdout = captured_output
+        # Apply internal time limit (does not include model build time; kept simple by design)
+        if timeout is not None and timeout > 0:
+            try:
+                model.setRealParam("limits/time", float(timeout))
+            except Exception:
+                model.setParam("limits/time", float(timeout))
+
+        class _LineWriter:
+            """Thread-safe, line-buffered writer pushing lines to asyncio queue on the main loop."""
+
+            __slots__ = ("_buf", "_lock", "_loop", "_queue")
+
+            def __init__(self, loop_, queue_):
+                self._buf: list[str] = []
+                self._lock = threading.Lock()
+                self._loop = loop_
+                self._queue = queue_
+
+            def write(self, s: str):
+                with self._lock:
+                    self._buf.append(s)
+                    chunk = "".join(self._buf)
+                    if "\n" not in chunk:
+                        return
+                    *lines, rest = chunk.split("\n")
+                    self._buf = [rest] if rest else []
+                for ln in lines:
+                    ln = ln.rstrip("\r")
+                    if ln:
+                        # Schedule into the asyncio loop without creating a coroutine
+                        self._loop.call_soon_threadsafe(self._queue.put_nowait, ln)
+
+            def flush(self):
+                pass
+
+            def flush_leftover(self):
+                with self._lock:
+                    leftover = "".join(self._buf).strip()
+                    self._buf.clear()
+                if leftover:
+                    self._loop.call_soon_threadsafe(self._queue.put_nowait, leftover)
+
+        writer = _LineWriter(loop, log_queue)
 
         try:
-            model.optimize()
+            with redirect_stdout(writer), redirect_stderr(writer):
+                model.optimize()
         finally:
-            # Restore standard output
-            sys.stdout = old_stdout
-            captured_output.seek(0)
+            # Flush last partial line and signal completion
+            try:
+                writer.flush_leftover()
+            except Exception:
+                pass
+            stop_event.set()
 
-            # Send captured output to log queue
-            for line in captured_output:
-                if line.strip():
-                    # Use run_coroutine_threadsafe as this is called from a different thread
-                    asyncio.run_coroutine_threadsafe(log_queue.put(line.strip()), asyncio.get_running_loop())
-
-        stop_event.set()
-
-    def _parse_log_line(self, line: str) -> Optional[SolverEvent]:
+    def _parse_log_line(self, line: str, sequence: int) -> Optional[SolverEvent]:
         """Parses a raw log line from SCIP into a structured SolverEvent."""
         match = self.metric_regex.match(line)
         ts = datetime.now(timezone.utc).isoformat()
@@ -142,23 +205,25 @@ class ScipSolverWrapper:
                     iteration=int(match.group(2)),
                     objective_value=float(match.group(4)) if match.group(4) != "inf" else float("inf"),
                     gap=float(match.group(5)) if match.group(5) not in ["-", "inf"] else float("inf"),
+                    sequence=sequence,
                 )
             except (ValueError, IndexError):
                 # Fallback for parsing errors
-                return LogEvent(timestamp=ts, level="info", stage="solving", message=line.strip())
+                return LogEvent(timestamp=ts, level="info", stage="solving", message=line.strip(), sequence=sequence)
         elif line.strip():
             # It's a standard log line
-            return LogEvent(timestamp=ts, level="info", stage="presolve", message=line.strip())
+            return LogEvent(timestamp=ts, level="info", stage="presolve", message=line.strip(), sequence=sequence)
         return None
 
     async def _build_model(self, problem: MIPProblem, timeout: Optional[float] = None) -> Tuple[Model, Dict[str, Any]]:
         """Builds a pyscipopt.Model instance from a MIPProblem definition."""
         model = Model(problem.parameters.name)
 
+        # Simple time limit (solver-side). This does NOT include build time (kept minimal).
         if timeout is not None and timeout > 0:
-            model.setParam("limits/time", timeout)
+            model.setParam("limits/time", float(timeout))
 
-        vars = {}
+        vars: Dict[str, Any] = {}
         for var_data in problem.variables:
             vars[var_data.name] = model.addVar(
                 name=var_data.name,
@@ -232,55 +297,70 @@ class ScipSolverWrapper:
         status = status_map.get(raw_status, "not solved")
 
         objective_value = None
-        solution_vars = {}
-        mip_gap = None
-        slacks = {}
-        duals = {}
-        reduced_costs = {}
+        solution_vars: Dict[str, float] = {}
+        mip_gap: Optional[float] = None
+        slacks: Dict[str, float] = {}
+        duals: Dict[str, float] = {}
+        reduced_costs: Dict[str, float] = {}
 
         if model.getNSols() > 0:
-            objective_value = model.getObjVal()
-            solution = model.getBestSol()
+            # Best solution & objective
+            try:
+                solution = model.getBestSol()
+                objective_value = model.getSolObjVal(solution)
+            except Exception:
+                solution = model.getBestSol()
+                objective_value = model.getObjVal()
+
+            # Variable values
             for var_name, var in vars.items():
-                solution_vars[var_name] = solution[var]
+                try:
+                    solution_vars[var_name] = model.getSolVal(solution, var)
+                except Exception:
+                    pass
 
-            # Check if the problem is a MIP
+            # MIP gap if applicable
             is_mip = any(v.category != "Continuous" for v in problem.variables)
-
             if is_mip:
-                mip_gap = model.getGap()
+                try:
+                    mip_gap = model.getGap()
+                except Exception:
+                    mip_gap = None
 
-            # Get slacks
+            # Slacks (named constraints only)
             for const_data in problem.constraints:
-                if const_data.name:
-                    activity = 0
-                    for coeff in const_data.coefficients:
-                        if coeff.name in solution_vars:
-                            activity += solution_vars[coeff.name] * coeff.value
+                if not const_data.name:
+                    continue
+                activity = 0.0
+                for coeff in const_data.coefficients:
+                    if coeff.name in solution_vars:
+                        activity += solution_vars[coeff.name] * coeff.value
 
-                    rhs = 1e20
-                    lhs = -1e20
+                rhs = 1e20
+                lhs = -1e20
+                if const_data.sense == -1:  # LEQ
+                    rhs = -const_data.constant if const_data.constant is not None else 0.0
+                elif const_data.sense == 1:  # GEQ
+                    lhs = -const_data.constant if const_data.constant is not None else 0.0
+                elif const_data.sense == 0:  # EQ
+                    rhs = -const_data.constant if const_data.constant is not None else 0.0
+                    lhs = rhs
 
-                    if const_data.sense == -1:  # LEQ
-                        rhs = -const_data.constant if const_data.constant is not None else 0.0
-                    elif const_data.sense == 1:  # GEQ
-                        lhs = -const_data.constant if const_data.constant is not None else 0.0
-                    elif const_data.sense == 0:  # EQ
-                        rhs = -const_data.constant if const_data.constant is not None else 0.0
-                        lhs = rhs
+                if rhs < 1e20:
+                    slacks[const_data.name] = rhs - activity
+                elif lhs > -1e20:
+                    slacks[const_data.name] = activity - lhs
 
-                    if rhs < 1e20:
-                        slacks[const_data.name] = rhs - activity
-                    elif lhs > -1e20:
-                        slacks[const_data.name] = activity - lhs
-
-            # Get duals and reduced costs for LPs
+            # Duals & reduced costs for LPs
             if not is_mip:
-                for c in model.getConss():
-                    if c.isLinear():
-                        duals[c.name] = model.getDualSolVal(c)
-                for v_name, v_obj in vars.items():
-                    reduced_costs[v_name] = model.getVarRedcost(v_obj)
+                try:
+                    for c in model.getConss():
+                        if c.isLinear():
+                            duals[c.name] = model.getDualSolVal(c)
+                    for v_name, v_obj in vars.items():
+                        reduced_costs[v_name] = model.getVarRedcost(v_obj)
+                except Exception:
+                    pass
 
         return MIPSolution(
             name=problem.parameters.name,
@@ -288,7 +368,7 @@ class ScipSolverWrapper:
             objective_value=objective_value,
             variables=solution_vars,
             mip_gap=mip_gap,
-            slacks=slacks if slacks else None,
-            duals=duals if duals else None,
-            reduced_costs=reduced_costs if reduced_costs else None,
+            slacks=slacks or None,
+            duals=duals or None,
+            reduced_costs=reduced_costs or None,
         )
