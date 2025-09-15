@@ -21,13 +21,7 @@ from ..models import (
 class ScipSolverWrapper:
     """
     A wrapper for the pyscipopt library that provides solving capabilities and
-    streams structured SSE events.
-
-    Simplifications:
-      - Uses SCIP's `redirectOutput()` to stream logs in real time.
-      - No setLogfile() / file tailing.
-      - One worker thread runs SCIP; it forwards lines into an asyncio.Queue
-        via `loop.call_soon_threadsafe(queue.put_nowait, line)`.
+    streams logs and results as structured SSE events.
     """
 
     def __init__(self):
