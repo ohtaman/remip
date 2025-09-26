@@ -18,6 +18,10 @@ class MIPSolverService:
         """
         return await self.solver.solve(problem_data, timeout=timeout)
 
+    def interrupt_solver(self):
+        """Interrupts the solver."""
+        self.solver.interrupt_solver()
+
     async def solve_stream(
         self, problem_data: MIPProblem, timeout: Optional[float] = None
     ) -> AsyncGenerator[SolverEvent, None]:

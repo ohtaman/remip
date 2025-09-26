@@ -1,60 +1,75 @@
-# Task List: Server-Side Solver Timeout
+# Task List: Pyodide (Node.js) Support
 
-This document breaks down the implementation of the server-side timeout feature into a series of actionable tasks for the developer.
+This document breaks down the work required to implement Pyodide support for `remip-client` in a Node.js environment.
 
-## 1. Environment Setup
+## Phase 1: Core Implementation
 
-- [x] Ensure you are on the `feature/support-timeout` branch.
+-   [ ] **Task 1.1: Create New Modules**
+    -   Create the following empty files:
+        -   `remip-client/src/remip_client/environment.py`
+        -   `remip-client/src/remip_client/http_client.py`
 
-## 2. Server-Side Implementation (`remip`)
+-   [ ] **Task 1.2: Implement Environment Detection**
+    -   In `environment.py`, implement the `get_environment()` function to detect `cpython`, `pyodide-node`, and `pyodide-browser` environments.
 
--   **Task 2.1: Update API Endpoint**
-    -   **File**: `remip/src/remip/main.py`
-    -   **Action**: Modify the signature of the `solve` function to accept an optional `timeout` query parameter with validation.
-    -   **Details**: Use `timeout: Optional[float] = Query(None, ge=0, description="...")`.
-    -   **Action**: Pass the received `timeout` value to the `MIPSolverService` methods.
+-   [ ] **Task 1.3: Implement `HttpClient` Abstraction**
+    -   In `http_client.py`, define the `HttpClient` abstract base class with an abstract `post` method and a `close` method.
 
--   **Task 2.2: Update Service Layer**
-    -   **File**: `remip/src/remip/services.py`
-    -   **Action**: Update the signatures of `solve` and `solve_stream` to accept the `timeout: Optional[float]` parameter.
-    -   **Action**: Pass the `timeout` value down to the `self.solver` methods.
+-   [ ] **Task 1.4: Implement `RequestsHttpClient`**
+    -   In `http_client.py`, create the `RequestsHttpClient` class that inherits from `HttpClient`.
+    -   It should wrap a `requests.Session` to handle requests in a CPython environment.
 
--   **Task 2.3: Implement Core Timeout Logic**
-    -   **File**: `remip/src/remip/solvers/scip_wrapper.py`
-    -   **Action**: Update the signatures of `solve` and `solve_and_stream_events` to accept the `timeout: Optional[float]` parameter.
-    -   **Action**: In `solve_and_stream_events`, if `timeout` is provided, create and manage an `asyncio` watchdog task that calls `model.interruptSolve()` after the specified duration.
-    -   **Action**: In `_extract_solution`, check for the `"userinterrupt"` status from the solver and map it to `"timeout"` in the returned `MIPSolution`.
+-   [ ] **Task 1.5: Implement `PyodideHttpClient`**
+    -   In `http_client.py`, create the `PyodideHttpClient` class.
+    -   Implement the `post` method which uses `pyodide.ffi.run_sync` to call an internal `_post_async` method.
+    -   The `_post_async` method will use `js.fetch` to make the actual HTTP request.
 
-## 3. Client-Side Implementation (`remip-client`)
+-   [ ] **Task 1.6: Create a `PyodideResponse` Wrapper**
+    -   In `http_client.py`, create a response wrapper class for the `js.fetch` response.
+    -   Implement a `json()` method that correctly awaits the JavaScript promise.
+    -   Implement an `ok` property and a `raise_for_status()` method.
 
--   **Task 3.1: Update Solver Initialization**
-    -   **File**: `remip-client/src/remip_client/solver.py`
-    -   **Action**: Update the `ReMIPSolver.__init__` method to accept and store a `timeout=None` parameter.
+-   [ ] **Task 1.7: Implement Streaming `iter_lines` for Pyodide**
+    -   In the `PyodideResponse` wrapper, implement a synchronous `iter_lines` method.
+    -   This method must internally handle the asynchronous JavaScript `ReadableStream` from the `fetch` response and yield decoded lines synchronously. This is a complex task.
 
--   **Task 3.2: Pass Timeout in Request**
-    -   **File**: `remip-client/src/remip_client/solver.py`
-    -   **Action**: In the `solve` method, dynamically build the request URL and parameters. If `self.timeout` is set, add it as a query parameter to the request.
+-   [ ] **Task 1.8: Integrate `HttpClient` into `ReMIPSolver`**
+    -   In `remip_client/solver.py`, modify the `__init__` method to use `get_environment()` and instantiate the correct `HttpClient`.
+    -   Replace all `requests.post` calls with `self._client.post`.
+    -   Add a `__del__` method to the solver to call `self._client.close()`.
 
-## 4. Testing
+## Phase 2: Testing
 
--   **Task 4.1: Implement Client Unit Test**
-    -   **File**: `remip-client/tests/test_solver.py`
-    -   **Action**: Add the `test_solve_with_timeout_sends_query_param` test case. Use `requests_mock` to assert that the request URL contains the correct `timeout` query parameter.
+-   [ ] **Task 2.1: Implement CPython Unit Tests**
+    -   Create `remip-client/tests/test_environment.py` and test the `get_environment` function.
+    -   Create `remip-client/tests/test_http_client.py` to test the instantiation logic of the clients.
 
--   **Task 4.2: Implement Server Integration Tests**
-    -   **File**: `remip/tests/test_timeout.py` (create this new file).
-    -   **Action**: Add a helper function to generate a time-consuming knapsack problem.
-    -   **Action**: Implement the `test_solve_with_timeout_triggers` test case.
-    -   **Action**: Implement the `test_solve_without_timeout_completes_optimally` test case.
-    -   **Action**: Implement the `test_solve_with_invalid_timeout_returns_error` test case.
+-   [ ] **Task 2.2: Refactor Existing Solver Tests**
+    -   Update `remip-client/tests/test_solver.py`.
+    -   Modify the tests to mock `remip_client.http_client.RequestsHttpClient` instead of mocking the `requests` library directly.
+    -   Ensure all existing tests pass after the refactoring.
 
--   **Task 4.3: Run All Tests**
-    -   **Action**: Execute the full test suites for both `remip` and `remip-client` projects and ensure all tests pass.
+-   [ ] **Task 2.3: Create Node.js Test Runner**
+    -   Create a new file: `remip-client/tests/node/test_solver_pyodide.js`.
+    -   In this file, write the JavaScript code to:
+        1.  Load the Pyodide module.
+        2.  Monkeypatch the global `fetch` API to return mock responses.
+        3.  Load the `remip-client` wheel using `micropip`.
+        4.  Execute a Python test script.
 
-## 5. Finalization
+-   [ ] **Task 2.4: Create Python Test Script for Node.js**
+    -   Create a new Python file (e.g., `remip-client/tests/node/py_tests.py`).
+    -   In this file, write the Python test functions (`test_node_streaming_solve`, `test_node_non_streaming_solve`, etc.) that will be called by the Node.js runner.
+    -   These tests will use `ReMIPSolver` to solve problems and assert the results are correct based on the mocked `fetch` responses.
 
--   **Task 5.1: Code Review**
-    -   **Action**: Create a pull request and ask for a review of the changes.
+## Phase 3: Finalization
 
--   **Task 5.2: Merge**
-    -   **Action**: Merge the `feature/support-timeout` branch into the main branch after approval.
+-   [ ] **Task 3.1: Update Documentation**
+    -   Update the main `README.md` to include instructions on how to use the library in a Pyodide/Node.js environment.
+
+-   [ ] **Task 3.2: Manual Verification**
+    -   Perform a full manual test run:
+        1.  Run all CPython tests with `pytest`.
+        2.  Build the wheel.
+        3.  Run the Node.js tests.
+    -   Ensure all tests pass and the client is fully functional.

@@ -3,13 +3,17 @@
   "version": "0.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test_solver_pyodide.js",
+    "build-and-test": "../../../scripts/test-pyodide.sh",
+    "build": "cd ../../ && uv build",
+    "test-only": "node test_solver_pyodide.js"
   },
   "author": "",
   "license": "UNLICENSED",
-  "dependencies": {
-    "pyodide": "^0.27.7"
-  },
   "keywords": [],
-  "description": ""
+  "description": "",
+  "devDependencies": {
+    "node-fetch": "^3.3.2",
+    "pyodide": "^0.28.3"
+  }
 }

@@ -1,7 +1,6 @@
 import json
 from typing import AsyncGenerator, Optional
 
-import pytest
 from fastapi.testclient import TestClient
 
 from remip.main import app, get_solver_service
@@ -75,7 +74,7 @@ def test_solver_info():
     assert response.json() == {"solver": "SCIP", "version": "x.y.z"}
 
 
-def test_solve_valid_non_streaming():
+def test_solve_non_streaming():
     problem = {
         "parameters": {"name": "test_problem", "sense": 1, "status": 0, "sol_status": 0},
         "objective": {"name": "objective", "coefficients": [{"name": "x", "value": 1.0}]},
@@ -97,17 +96,15 @@ def test_solve_invalid():
     assert response.status_code == 422  # Unprocessable Entity
 
 
-@pytest.mark.parametrize("url", ["/solve?stream=sse", "/solve"])
-def test_solve_stream(url):
+def test_solve_stream_sse():
     problem = {
         "parameters": {"name": "test_problem", "sense": 1, "status": 0, "sol_status": 0},
         "objective": {"name": "objective", "coefficients": [{"name": "x", "value": 1.0}]},
         "constraints": [],
         "variables": [{"name": "x", "lowBound": 0, "upBound": 1, "cat": "Continuous"}],
     }
-    headers = {"Accept": "text/event-stream"} if url == "/solve" else {}
 
-    response = client.post(url, json=problem, headers=headers)
+    response = client.post("/solve?stream=sse", json=problem)
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
 
@@ -132,3 +129,16 @@ def test_solve_stream(url):
 
     assert events[3]["type"] == "end"
     assert events[3]["data"]["success"] is True
+
+
+def test_solve_non_stream_with_accept_header():
+    problem = {
+        "parameters": {"name": "test_problem", "sense": 1, "status": 0, "sol_status": 0},
+        "objective": {"name": "objective", "coefficients": [{"name": "x", "value": 1.0}]},
+        "constraints": [],
+        "variables": [{"name": "x", "lowBound": 0, "upBound": 1, "cat": "Continuous"}],
+    }
+    headers = {"Accept": "text/event-stream"}
+    response = client.post("/solve", json=problem, headers=headers)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")

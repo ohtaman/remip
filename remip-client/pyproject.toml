@@ -11,10 +11,11 @@ dependencies = [
     "requests",
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "pytest",
     "requests-mock",
+    "ruff",
 ]
 
 [build-system]

@@ -1,95 +1,93 @@
-# Final Technical Design: Server-Side Solver Timeout
+# Technical Design: Pyodide Support for remip-client
 
-## 1. Overview
+## 1. Introduction
 
-This document outlines the final technical design for implementing a server-side solver timeout. This design has been refined based on feedback to ensure a clean separation between the problem definition and solver control parameters. The timeout will be managed by the `remip` server and passed as a URL query parameter in API requests.
+This document provides the technical design for adding Pyodide support to the `remip-client` library, as specified in the approved requirements document. The core of this design is to abstract the HTTP communication layer to work in both standard Python and Pyodide environments without altering the public API of the `ReMIPSolver`.
 
-## 2. Proposed Changes
+## 2. Proposed Architecture
 
-### 2.1. `remip-client` (`remip-client/src/remip_client/solver.py`)
+We will introduce an HTTP client abstraction to handle the differences between the `requests` library (for CPython) and the `pyodide.http` module (for Pyodide). This logic will reside in a new `http_client.py` module.
 
-- **`ReMIPSolver.__init__`**: The constructor will be updated to accept a `timeout` parameter, which will be stored on the instance.
-  ```python
-  def __init__(self, base_url="http://localhost:8000", stream=True, timeout=None, **kwargs):
-      super().__init__(**kwargs)
-      self.base_url = base_url
-      self.stream = stream
-      self.timeout = timeout
-  ```
+### 2.1. Environment Detection
+A utility function will be used to determine the current execution environment.
 
-- **`ReMIPSolver.solve`**: The request URL will be dynamically constructed to include the `timeout` as a query parameter if it has been set. This will apply to both streaming and non-streaming requests.
+```python
+# remip_client/environment.py
+import sys
+import js
 
-  ```python
-  # Example modification in solve method
-  url = f"{self.base_url}/solve"
-  params = {}
-  if self.stream:
-      params['stream'] = 'sse'
-  if self.timeout is not None:
-      params['timeout'] = self.timeout
+def get_environment():
+    """Checks if the code is running in CPython, Pyodide/Node, or Pyodide/Browser."""
+    if "pyodide" not in sys.modules:
+        return "cpython"
+    if hasattr(js, "process"):
+        return "pyodide-node"
+    return "pyodide-browser"
+```
 
-  response = requests.post(
-      url,
-      params=params,
-      json=problem_dict,
-      # ...
-  )
-  ```
+### 2.2. HTTP Client Abstraction
+...
+#### 2.2.3. Pyodide Implementation (`PyodideHttpClient`)
+This class will use `js.fetch` to make requests within the Node.js environment. Since `fetch` is asynchronous, we will use `pyodide.ffi.run_sync` to bridge the async call.
 
-### 2.2. `remip` Server
+```python
+# remip_client/http_client.py
+import json
+from urllib.parse import urlencode
+from pyodide.ffi import run_sync
+import js
 
-#### 2.2.1. API Endpoint (`remip/src/remip/main.py`)
+class PyodideHttpClient(HttpClient):
+    async def _post_async(self, url, params, json_data, timeout, stream):
+        kwargs = {
+            "method": "POST",
+            "body": json.dumps(json_data),
+            "headers": js.Headers.new({"Content-Type": "application/json"}),
+        }
+        # Note: timeout is not directly supported in node-fetch like in requests
+        full_url = f"{url}?{urlencode(params)}" if params else url
+        response = await js.fetch(full_url, **kwargs)
+        if not response.ok:
+            raise Exception(f"HTTP Error: {response.status} {response.statusText}")
+        return response
 
-- The `/solve` endpoint will be updated to accept an optional `timeout` float value from a query parameter. FastAPI's `Query` will be used to add validation (e.g., must be greater than or equal to zero).
+    def post(self, url, params, json, timeout, stream=False):
+        return run_sync(self._post_async(url, params, json, timeout, stream))
+```
+*Note: The response object from `js.fetch` is a JavaScript Response. We will need to create a wrapper/adapter to provide a consistent interface for methods like `json()` and `iter_lines()`.*
 
-  ```python
-  from fastapi import Depends, FastAPI, Query, Request
+### 2.3. `ReMIPSolver` Integration
+The `ReMIPSolver` will be modified to use the new HTTP client abstraction.
 
-  # ...
+```python
+# remip_client/solver.py
+from .environment import get_environment
+from .http_client import RequestsHttpClient, PyodideHttpClient
 
-  @app.post("/solve")
-  async def solve(
-      request: Request,
-      problem: MIPProblem,
-      service: MIPSolverService = Depends(get_solver_service),
-      timeout: Optional[float] = Query(None, ge=0, description="Maximum solver time in seconds")
-  ):
-      # ... pass timeout to service layer
-  ```
+class ReMIPSolver(LpSolver):
+    def __init__(self, base_url="http://localhost:8000", ...):
+        super().__init__(**kwargs)
+        # ...
+        self.environment = get_environment()
+        if self.environment == "pyodide-node":
+            self._client = PyodideHttpClient()
+        elif self.environment == "cpython":
+            self._client = RequestsHttpClient()
+        else:
+            # Or raise an error for unsupported environments like pyodide-browser
+            raise NotImplementedError("This environment is not supported.")
+...
+```
+### 2.4. Streaming Response Handling in Pyodide
+The streaming implementation will be similar to the browser approach, as Node.js `fetch` also provides a `ReadableStream` (`response.body`). The logic for reading from the stream, decoding, and yielding lines remains conceptually the same, but will use the stream implementation provided by the Node.js environment via `js`.
 
-#### 2.2.2. Model (`remip/src/remip/models.py`)
 
-- **No changes** will be made to the `MIPProblem` model, keeping it clean of solver-specific control parameters.
+## 3. File Modifications
 
-#### 2.2.3. Service Layer (`remip/src/remip/services.py`)
+- **`remip-client/src/remip_client/solver.py`**: Will be updated to remove direct `requests` calls and use the `HttpClient` abstraction.
+- **`remip-client/src/remip_client/http_client.py`** (New File): Will contain the `HttpClient` ABC and its two concrete implementations.
+- **`remip-client/src/remip_client/environment.py`** (New File): Will contain the `is_pyodide` utility function.
 
-- The service methods will be updated to accept the `timeout` and pass it down to the solver wrapper.
+## 4. Summary
 
-  ```python
-  # Example modification in MIPSolverService
-  async def solve(self, problem_data: MIPProblem, timeout: Optional[float] = None) -> MIPSolution:
-      return await self.solver.solve(problem_data, timeout=timeout)
-
-  async def solve_stream(self, problem_data: MIPProblem, timeout: Optional[float] = None) -> AsyncGenerator[SolverEvent, None]:
-      async for event in self.solver.solve_and_stream_events(problem_data, timeout=timeout):
-          yield event
-  ```
-
-#### 2.2.4. Solver Wrapper (`remip/src/remip/solvers/scip_wrapper.py`)
-
-- The core server-side timeout logic will be implemented here.
-- The `solve_and_stream_events` method will accept the `timeout` value.
-- If a timeout is provided, an `asyncio` watchdog task will be started. This task will sleep for the specified duration.
-- If the watchdog's sleep completes before the solver finishes, it will call `model.interruptSolve()` in a thread-safe manner to gracefully stop the optimization process.
-- The `_extract_solution` method will check the solver status. If the status is `"userinterrupt"` (the result of calling `interruptSolve()`), it will be mapped to our application's `"timeout"` status in the final `MIPSolution`.
-
-## 3. Data Flow Example
-
-1.  A user calls `ReMIPSolver(timeout=60).solve(problem)`.
-2.  The client sends a `POST` request to `http://localhost:8000/solve?timeout=60`.
-3.  The server's `/solve` endpoint receives the request, extracting the `MIPProblem` from the body and the `timeout` from the query parameters.
-4.  The `timeout` value is passed through the service layer to the `ScipSolverWrapper`.
-5.  The wrapper starts the solver in a background thread and concurrently starts a 60-second watchdog timer.
-6.  If 60 seconds pass, the watchdog interrupts the solver.
-7.  The wrapper catches the interruption, checks the solver status (`"userinterrupt"`), and creates a `MIPSolution` with `"status": "timeout"`.
-8.  The server sends this solution back to the client.
+This design introduces a clean abstraction over the HTTP communication layer, allowing `remip-client` to support both CPython and Pyodide environments with minimal changes to the core solver logic. It addresses the key challenges of asynchronous APIs in a synchronous context and streaming data handling.

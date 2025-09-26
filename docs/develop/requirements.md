@@ -1,38 +1,43 @@
-# Requirements: Solver Timeout
+# Requirements: Pyodide Support for remip-client
 
-## 1. Overview
+## 1. Introduction
 
-The `remip` solver can sometimes take a long time to find a solution for complex optimization problems. To prevent indefinite runs and to allow users to control the maximum execution time, a timeout mechanism is required. This feature will allow users to specify a maximum duration for the solver to run.
+This document outlines the requirements for enabling the `remip-client` library to run in a Pyodide environment. The primary goal is to allow users to leverage the `remip-client` for solving optimization problems directly within a web browser, communicating with a backend `remip` server.
 
-## 2. Functional Requirements
+## 2. Background
 
-### 2.1. Timeout Parameter
+The `remip-client` currently uses the `requests` library, which is incompatible with WebAssembly environments. The goal is to enable the client to run within Pyodide in a **Node.js environment**. To achieve this, the networking layer must be adapted to use Node.js's native `fetch` API, which Pyodide can access via the `js` module.
 
-- The solver will accept a `timeout` parameter, specified in seconds.
-- This parameter will be optional.
-- If the `timeout` parameter is not provided, the solver will run without a time limit, preserving the current default behavior.
+## 3. Functional Requirements
 
-### 2.2. Solver Behavior
+### FR-1: Environment Detection
+- The library MUST be able to detect whether it is running in a standard CPython environment or a Pyodide environment.
 
-- When the `timeout` is specified, the solver process must terminate if the execution time exceeds the given value.
-- If the solver terminates due to a timeout, it should return a specific status indicating that the timeout was reached.
-- If a feasible (but not necessarily optimal) solution is found before the timeout occurs, the solver should return the best solution found so far.
+### FR-2: Conditional HTTP Client
+- The library MUST use the standard `requests` library when running in a CPython environment.
+- The library MUST use a Pyodide-compatible HTTP client (e.g., `pyodide-http`) when running in a Pyodide environment.
 
-## 3. Non-Functional Requirements
+### FR-3: Full Functionality in Pyodide
+- The `ReMIPSolver` class MUST be fully functional in the Pyodide environment.
+- All existing features, including both streaming (SSE) and non-streaming API communication, MUST work as they do in the CPython environment.
+- The client MUST be able to successfully send a problem to the `remip` server and parse the solution.
 
-### 3.1. API Integration
+### FR-4: Seamless User Experience
+- The changes MUST be transparent to the end-user. The public API of `ReMIPSolver` and its usage via `pulp` should not change, regardless of the environment.
 
-- The `timeout` parameter must be integrated into the server's API endpoint for solving optimization problems.
-- The `remip-client` library must be updated to support passing the `timeout` parameter to the server.
+## 4. Non-Functional Requirements
 
-### 3.2. Error Handling
+### NFR-1: Dependency Management
+- `requests` should remain a core dependency for the standard CPython installation.
+- The `pyodide.http` module is built into the Pyodide environment, so no additional dependency management is required for it. The `pyproject.toml` file does not need to be modified for this purpose.
 
-- If an invalid value is provided for the timeout (e.g., a negative number), the API should return a validation error.
+### NFR-2: Code Maintainability
+- The implementation should avoid significant code duplication. A single `ReMIPSolver` class should handle both environments, abstracting away the differences in the HTTP clients.
 
-### 3.3. User Experience
+### NFR-3: Packaging
+- The package MUST be distributed as a universal wheel (`.whl`) that is compatible with both CPython and Pyodide/WASM.
 
-- The client should receive a clear message indicating that the solver stopped because the timeout was reached.
+## 5. Out of Scope
 
-## 4. Out of Scope
-
-- This feature will not include support for pausing and resuming the solver.
+- This project does not cover the setup or deployment of the `remip` backend server.
+- This project does not include creating a user-facing web application that uses the client, although a test HTML file will be used for verification.

@@ -25,11 +25,21 @@ class ScipSolverWrapper:
     """
 
     def __init__(self):
+        self.model: Optional[Model] = None
         # Regex to capture SCIP's progress table lines
         self.metric_regex = re.compile(
             r"\s*(\d+\.\d+)\s*\|\s*\d+\s*\|\s*\d+\s*\|\s*(\d+)\s*\|.*\|\s*([\d\.\-inf]+)\s*\|\s*([\d\.\-inf]+)\s*\|\s*([\d\.\-inf]+)"
         )
         self.log_sequence = 0
+
+    def interrupt_solver(self):
+        """Interrupts the SCIP solver if it is running."""
+        if self.model:
+            try:
+                self.model.interruptSolve()
+            except Exception:
+                # SCIP might throw an error if not in the solving stage
+                pass
 
     async def solve(self, problem: MIPProblem, timeout: Optional[float] = None) -> MIPSolution:
         """
@@ -69,6 +79,7 @@ class ScipSolverWrapper:
         log_queue: asyncio.Queue[str] = asyncio.Queue()
         stop_event = threading.Event()
         model, vars = await self._build_model(problem, timeout=timeout)
+        self.model = model
 
         # Run SCIP in a separate thread (non-blocking for the asyncio loop)
         loop = asyncio.get_running_loop()
@@ -203,10 +214,10 @@ class ScipSolverWrapper:
                 )
             except (ValueError, IndexError):
                 # Fallback for parsing errors
-                return LogEvent(timestamp=ts, level="info", stage="solving", message=line.strip(), sequence=sequence)
+                return LogEvent(timestamp=ts, level="info", stage="log_parsing_error", message=line.strip(), sequence=sequence)
         elif line.strip():
             # It's a standard log line
-            return LogEvent(timestamp=ts, level="info", stage="presolve", message=line.strip(), sequence=sequence)
+            return LogEvent(timestamp=ts, level="info", stage="solver_log", message=line.strip(), sequence=sequence)
         return None
 
     async def _build_model(self, problem: MIPProblem, timeout: Optional[float] = None) -> Tuple[Model, Dict[str, Any]]:

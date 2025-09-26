@@ -19,3 +19,4 @@ remip-client/__pycache__/
 .env
 .gemini/
 *.lock
+remip-client/tests/node/node_modules/
