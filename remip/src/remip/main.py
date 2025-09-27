@@ -32,6 +32,11 @@ def get_solver_service():
     return MIPSolverService()
 
 
+@app.get("/health")
+async def health():
+    return True
+
+
 @app.get("/solver-info")
 async def solver_info():
     """Returns information about the solver."""
