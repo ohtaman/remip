@@ -8,9 +8,9 @@ from fastapi import Depends, FastAPI, Query, Request
 from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 
+from ._version import __version__
 from .models import MIPProblem, MIPSolution
 from .services import MIPSolverService
-from ._version import __version__
 
 app = FastAPI(
     title="ReMIP",
