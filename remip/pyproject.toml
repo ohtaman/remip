@@ -26,7 +26,7 @@ source = "vcs"
 fallback-version = "0.1.0"
 
 # setuptools-scm to use parent directory's .git as reference
-[tool.setuptools_scm]
+[tool.hatch.version.raw-options]
 root = ".."
 
 [tool.ruff]
@@ -35,8 +35,8 @@ line-length = 128
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 
-[tool.hatch.workspaces]
-packages = ["./remip-client"]
+[tool.hatch.build.hooks.vcs]
+version-file = "src/remip/_version.py"
 
 [dependency-groups]
 dev = [
