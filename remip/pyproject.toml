@@ -28,6 +28,7 @@ fallback-version = "0.1.0"
 # setuptools-scm to use parent directory's .git as reference
 [tool.hatch.version.raw-options]
 root = ".."
+local_scheme = "no-local-version"
 
 [tool.ruff]
 line-length = 128
