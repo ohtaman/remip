@@ -1,7 +1,6 @@
 import argparse
 import logging
 import socket
-from importlib.metadata import version
 from typing import AsyncGenerator
 
 import uvicorn
@@ -11,13 +10,12 @@ from starlette.middleware.cors import CORSMiddleware
 
 from .models import MIPProblem, MIPSolution
 from .services import MIPSolverService
-
-print(version("remip"))
+from ._version import __version__
 
 app = FastAPI(
     title="ReMIP",
     description="A RESTful API for Mixed-Integer Programming (MIP) solvers.",
-    version=version("remip"),
+    version=__version__,
 )
 
 # Configure CORS
