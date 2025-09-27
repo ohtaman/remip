@@ -39,6 +39,29 @@ jobs:
           name: client-package
           path: dist/client/
 
+  testpypi:
+    name: Publish to TestPyPI
+    needs:
+      - build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/remip
+
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Publish distribution 📦 to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
   release:
     needs: build
     runs-on: ubuntu-latest
