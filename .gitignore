@@ -20,3 +20,6 @@ remip-client/__pycache__/
 .gemini/
 *.lock
 remip-client/tests/node/node_modules/
+
+# Dynamic versioning
+_version.py
