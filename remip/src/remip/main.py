@@ -1,5 +1,9 @@
-from typing import AsyncGenerator, Optional
+import argparse
+import logging
+import socket
+from typing import AsyncGenerator
 
+import uvicorn
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
@@ -39,8 +43,8 @@ async def solve(
     request: Request,
     problem: MIPProblem,
     service: MIPSolverService = Depends(get_solver_service),
-    timeout: Optional[float] = Query(None, ge=0, description="Maximum solver time in seconds"),
-    stream: Optional[str] = Query(None, description="Enable SSE streaming of solver events"),
+    timeout: float | None = Query(None, ge=0, description="Maximum solver time in seconds"),
+    stream: str | None = Query(None, description="Enable SSE streaming of solver events"),
 ) -> MIPSolution:
     """
     Solves a MIP problem and returns the solution.
@@ -68,3 +72,34 @@ async def solve(
     # Default behavior: solve and return the final solution
     solution = await service.solve(problem, timeout=timeout)
     return solution
+
+
+def main():
+    """
+    Runs the FastAPI application using uvicorn.
+    """
+    logging.basicConfig(level=logging.INFO)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=0)
+    parser.add_argument("--host", default="localhost")
+    args = parser.parse_args()
+
+    try:
+        port = args.port or 8000  # Default port
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((args.host, port))
+    except OSError:
+        if args.port:  # When port argument is specified.
+            logging.error(f"The specified port {port} is already in use. Aborting server startup.")
+            exit(-1)
+        else:
+            logging.info(f"Default port {port} is already in use, finding an available port.")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind((args.host, 0))
+                port = s.getsockname()[1]
+
+    uvicorn.run(app, host=args.host, port=port)
+
+
+if __name__ == "__main__":
+    main()
