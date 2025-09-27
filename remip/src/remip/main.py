@@ -10,11 +10,12 @@ from starlette.middleware.cors import CORSMiddleware
 
 from .models import MIPProblem, MIPSolution
 from .services import MIPSolverService
+from ._version import __version__
 
 app = FastAPI(
     title="ReMIP",
     description="A RESTful API for Mixed-Integer Programming (MIP) solvers.",
-    version="0.1.0",
+    version=__version__,
 )
 
 # Configure CORS
