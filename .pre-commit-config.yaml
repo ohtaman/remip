@@ -6,39 +6,16 @@ repos:
     hooks:
       - id: end-of-file-fixer
       - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
   - repo: local
     hooks:
-      - id: ruff
-        name: ruff
-        entry: bash -c 'cd remip && uv run ruff check --fix'
+      # 変更されたファイルに関連するテストとlintを実行
+      - id: test-changed-files
+        name: test-changed-files
+        entry: bash -c './scripts/test-changed-files.sh staged'
         language: system
-        types: [python]
-        args: ["--show-fixes"]
-      - id: ruff-format
-        name: ruff-format
-        entry: bash -c 'cd remip && uv run ruff format'
-        language: system
-        types: [python]
-      - id: pytest
-        name: pytest
-        entry: bash -c 'cd remip && uv run pytest'
-        language: system
-        types: [python]
         pass_filenames: false
-      - id: ruff-client
-        name: ruff-client
-        entry: bash -c 'cd remip-client && uv run ruff check --fix'
-        language: system
-        types: [python]
-        args: ["--show-fixes"]
-      - id: ruff-format-client
-        name: ruff-format-client
-        entry: bash -c 'cd remip-client && uv run ruff format'
-        language: system
-        types: [python]
-      - id: pytest-client
-        name: pytest-client
-        entry: bash -c 'cd remip-client && uv run pytest'
-        language: system
-        types: [python]
-        pass_filenames: false
+        always_run: false

@@ -82,6 +82,12 @@ Both packages follow the standard `src` layout for clean and maintainable code.
     cd ..
     ```
 
+5.  **Install pre-commit hooks (recommended):**
+    ```bash
+    # Install pre-commit and pre-push hooks
+    make pre-commit-install
+    ```
+
 ### Running the API
 
 To run the API server locally:
@@ -141,11 +147,85 @@ prob.solve(streaming_solver)
 
 ## Testing
 
+### Quick Development Testing
+
+For quick development testing, use the Makefile commands:
+
+```bash
+# Show all available commands
+make help
+
+# Install all dependencies
+make install
+
+# Run all tests (remip server + remip-client Python + remip-client Pyodide + Integration)
+make test-all
+
+# Run only remip server tests
+make test-remip-server
+
+# Run only remip-client Python tests
+make test-remip-client-python
+
+# Run only remip-client Pyodide tests (requires build)
+make test-remip-client-pyodide
+
+# Run all CPython tests (remip server + remip-client Python)
+make test-cpython
+
+# Run only Pyodide tests (alias for test-remip-client-pyodide)
+make test-pyodide
+
+# Quick development test (build + Pyodide test)
+make dev-test
+
+# Start development server
+make dev-server
+
+# Pre-commit hooks
+make pre-commit-install    # Install pre-commit and pre-push hooks
+make pre-commit-run        # Run pre-commit on all files
+make test-changed          # Test only changed files
+```
+
+### Manual Testing
+
 To run the full test suite for both the server and the client:
 
 ```bash
-uv run pytest
+# CPython tests
+cd remip && uv run pytest tests/ -v
+cd remip-client && uv run pytest tests/ -v
+
+# Pyodide tests (requires build)
+cd remip-client && uv build
+cd remip-client/tests/node && npm test
+
+# Or use the automated script
+./scripts/test-pyodide.sh
 ```
+
+### CI/CD
+
+The project includes GitHub Actions CI that automatically:
+
+- Runs CPython tests on Python 3.11 and 3.12
+- Builds and tests Pyodide integration
+- Runs integration tests with a live server
+- Tests on both `main` and `develop` branches
+- Runs on pull requests
+
+### Test Structure
+
+The project has 3 main test suites:
+
+1. **remip server tests** (`remip/tests/`): FastAPI server tests
+2. **remip-client Python tests** (`remip-client/tests/`): Python client library tests
+3. **remip-client Pyodide tests** (`remip-client/tests/node/`): Node.js-based tests using Pyodide for browser-like environment
+
+Additional test types:
+- **Integration Tests**: End-to-end tests with live server
+- **Streaming Tests**: Tests for Server-Sent Events (SSE) functionality
 
 ---
 

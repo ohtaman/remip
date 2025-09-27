@@ -73,6 +73,9 @@ class LogEvent(BaseModel):
     message: str
     sequence: int
 
+    def to_sse(self) -> str:
+        return f"event: {self.type}\ndata: {self.model_dump_json()}\n\n"
+
 
 class MetricEvent(BaseModel):
     type: Literal["metric"] = "metric"
@@ -82,6 +85,9 @@ class MetricEvent(BaseModel):
     iteration: int
     sequence: int
 
+    def to_sse(self) -> str:
+        return f"event: {self.type}\ndata: {self.model_dump_json()}\n\n"
+
 
 class ResultEvent(BaseModel):
     type: Literal["result"] = "result"
@@ -90,10 +96,16 @@ class ResultEvent(BaseModel):
     runtime_milliseconds: int
     sequence: int
 
+    def to_sse(self) -> str:
+        return f"event: {self.type}\ndata: {self.model_dump_json()}\n\n"
+
 
 class EndEvent(BaseModel):
     type: Literal["end"] = "end"
     success: bool
+
+    def to_sse(self) -> str:
+        return f"event: {self.type}\ndata: {self.model_dump_json()}\n\n"
 
 
 SolverEvent = Union[LogEvent, MetricEvent, ResultEvent, EndEvent]

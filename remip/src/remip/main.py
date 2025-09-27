@@ -1,33 +1,34 @@
 import argparse
 import logging
 import socket
-from typing import Optional
+from typing import AsyncGenerator
 
 import uvicorn
 from fastapi import Depends, FastAPI, Query, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import StreamingResponse
+from starlette.middleware.cors import CORSMiddleware
 
-from .models import MIPProblem
+from .models import MIPProblem, MIPSolution
 from .services import MIPSolverService
 
-logger = logging.getLogger(__name__)
+app = FastAPI(
+    title="ReMIP",
+    description="A RESTful API for Mixed-Integer Programming (MIP) solvers.",
+    version="0.1.0",
+)
 
-
-app = FastAPI()
-
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
 )
-app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 def get_solver_service():
+    """FastAPI dependency to get a solver service instance."""
     return MIPSolverService()
 
 
@@ -36,42 +37,46 @@ async def health():
     return True
 
 
+@app.get("/solver-info")
+async def solver_info():
+    """Returns information about the solver."""
+    return {"solver": "SCIP", "version": "x.y.z"}
+
+
 @app.post("/solve")
 async def solve(
     request: Request,
     problem: MIPProblem,
     service: MIPSolverService = Depends(get_solver_service),
-    timeout: Optional[float] = Query(None, ge=0, description="Maximum solver time in seconds"),
-):
+    timeout: float | None = Query(None, ge=0, description="Maximum solver time in seconds"),
+    stream: str | None = Query(None, description="Enable SSE streaming of solver events"),
+) -> MIPSolution:
     """
     Solves a MIP problem and returns the solution.
-    If the 'stream' query parameter is set to 'sse' or the 'Accept' header is 'text/event-stream',
-    it streams solver events using Server-Sent Events (SSE).
+
+    If `stream=sse` is specified, it streams solver events using Server-Sent Events (SSE).
+    The client can disconnect at any time, and the solver will be interrupted.
     """
-    stream_param = request.query_params.get("stream", "").lower()
-    accept_header = request.headers.get("accept", "").lower()
 
-    is_streaming_request = "sse" in stream_param or "text/event-stream" in accept_header
+    if stream == "sse":
 
-    if is_streaming_request:
+        async def sse_generator() -> AsyncGenerator[str, None]:
+            """Generator that yields SSE events, handling client disconnects."""
+            try:
+                async for event in service.solve_stream(problem, timeout=timeout):
+                    if await request.is_disconnected():
+                        print("Client disconnected, interrupting solver.")
+                        service.interrupt_solver()
+                        break
+                    yield event.to_sse()
+            except Exception as e:
+                print(f"An error occurred during streaming: {e}")
 
-        async def event_generator():
-            async for event in service.solve_stream(problem, timeout=timeout):
-                yield f"event: {event.type}\n"
-                yield f"data: {event.model_dump_json()}\n\n"
+        return StreamingResponse(sse_generator(), media_type="text/event-stream")
 
-        return StreamingResponse(event_generator(), media_type="text/event-stream")
-    else:
-        solution = await service.solve(problem, timeout=timeout)
-        return solution
-
-
-@app.get("/solver-info")
-async def solver_info():
-    """
-    Returns information about the solver.
-    """
-    return {"solver": "SCIP", "version": "x.y.z"}
+    # Default behavior: solve and return the final solution
+    solution = await service.solve(problem, timeout=timeout)
+    return solution
 
 
 def main():
@@ -90,10 +95,10 @@ def main():
             s.bind((args.host, port))
     except OSError:
         if args.port:  # When port argument is specified.
-            logger.error(f"The specified port {port} is already in use. Aborting server startup.")
+            logging.error(f"The specified port {port} is already in use. Aborting server startup.")
             exit(-1)
         else:
-            logger.info(f"Default port {port} is already in use, finding an available port.")
+            logging.info(f"Default port {port} is already in use, finding an available port.")
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.bind((args.host, 0))
                 port = s.getsockname()[1]

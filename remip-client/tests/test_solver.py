@@ -1,8 +1,10 @@
 import json
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 from pulp import LpMinimize, LpProblem, LpVariable, constants
+
 from remip_client.solver import ReMIPSolver
 
 
@@ -16,7 +18,8 @@ def lp_problem():
     return prob
 
 
-def test_solve_optimal_streaming(lp_problem, requests_mock):
+@patch("remip_client.http_client.RequestsHttpClient")
+def test_solve_optimal_streaming(mock_client_class, lp_problem):
     log_event = {
         "type": "log",
         "timestamp": "2025-01-01T00:00:00Z",
@@ -54,32 +57,43 @@ def test_solve_optimal_streaming(lp_problem, requests_mock):
         f"event: end\ndata: {json.dumps(end_event)}\n\n"
     )
 
-    requests_mock.post("http://localhost:8000/solve?stream=sse", text=sse_data)
+    mock_response = MagicMock()
+    mock_response.iter_lines.return_value = [
+        line.encode("utf-8") for line in sse_data.strip().split("\n")
+    ]
 
-    solver = ReMIPSolver(stream=True)
-    status = solver.solve(lp_problem)
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.solve.return_value = mock_response
+
+    solver = ReMIPSolver(stream=True, env="cpython")
+    status = solver.actualSolve(lp_problem)
     assert status == constants.LpStatusOptimal
     assert lp_problem.objective.value == 1.0
     assert lp_problem.variables()[0].varValue == 1.0
 
 
-def test_solve_optimal_non_streaming(lp_problem, requests_mock):
+@patch("remip_client.http_client.RequestsHttpClient")
+def test_solve_optimal_non_streaming(mock_client_class, lp_problem):
     solution = {
         "name": "Test_Problem",
         "status": "optimal",
         "objective_value": 1.0,
         "variables": {"x": 1.0},
     }
-    requests_mock.post("http://localhost:8000/solve", json=solution)
+    mock_response = MagicMock()
+    mock_response.json.return_value = solution
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.solve.return_value = mock_response
 
-    solver = ReMIPSolver(stream=False)
-    status = solver.solve(lp_problem)
+    solver = ReMIPSolver(stream=False, env="cpython")
+    status = solver.actualSolve(lp_problem)
     assert status == constants.LpStatusOptimal
     assert lp_problem.objective.value == 1.0
     assert lp_problem.variables()[0].varValue == 1.0
 
 
-def test_solve_infeasible_streaming(lp_problem, requests_mock):
+@patch("remip_client.http_client.RequestsHttpClient")
+def test_solve_infeasible_streaming(mock_client_class, lp_problem):
     result_event = {
         "type": "result",
         "timestamp": "2025-01-01T00:00:02Z",
@@ -98,78 +112,91 @@ def test_solve_infeasible_streaming(lp_problem, requests_mock):
         f"event: result\ndata: {json.dumps(result_event)}\n\n"
         f"event: end\ndata: {json.dumps(end_event)}\n\n"
     )
-    requests_mock.post("http://localhost:8000/solve?stream=sse", text=sse_data)
+    mock_response = MagicMock()
+    mock_response.iter_lines.return_value = [
+        line.encode("utf-8") for line in sse_data.strip().split("\n")
+    ]
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.solve.return_value = mock_response
 
-    solver = ReMIPSolver(stream=True)
-    status = solver.solve(lp_problem)
+    solver = ReMIPSolver(stream=True, env="cpython")
+    status = solver.actualSolve(lp_problem)
     assert status == constants.LpStatusInfeasible
 
 
-def test_solve_infeasible_non_streaming(lp_problem, requests_mock):
+@patch("remip_client.http_client.RequestsHttpClient")
+def test_solve_infeasible_non_streaming(mock_client_class, lp_problem):
     solution = {
         "status": "infeasible",
         "name": "Test_Problem",
         "objective_value": None,
         "variables": {},
     }
-    requests_mock.post("http://localhost:8000/solve", json=solution)
+    mock_response = MagicMock()
+    mock_response.json.return_value = solution
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.solve.return_value = mock_response
 
-    solver = ReMIPSolver(stream=False)
-    status = solver.solve(lp_problem)
+    solver = ReMIPSolver(stream=False, env="cpython")
+    status = solver.actualSolve(lp_problem)
     assert status == constants.LpStatusInfeasible
 
 
-def test_solve_api_error(lp_problem, requests_mock):
-    requests_mock.post(
-        "http://localhost:8000/solve",
-        exc=requests.exceptions.ConnectionError("API down"),
+@patch("remip_client.http_client.RequestsHttpClient")
+def test_solve_api_error(mock_client_class, lp_problem):
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.solve.side_effect = requests.exceptions.RequestException(
+        "API down"
     )
 
-    solver = ReMIPSolver()
-    status = solver.solve(lp_problem)
+    solver = ReMIPSolver(env="cpython")
+    status = solver.actualSolve(lp_problem)
     assert status == constants.LpStatusNotSolved
 
 
-def test_solve_with_timeout_sends_query_param(lp_problem, requests_mock):
+@patch("remip_client.http_client.RequestsHttpClient")
+def test_solve_with_timeout_sends_query_param(mock_client_class, lp_problem):
     """Tests that the timeout is sent as a query parameter."""
-    # Mock the endpoint, expecting the timeout parameter
-    requests_mock.post("http://localhost:8000/solve?stream=sse&timeout=60", json={})
+    mock_client_instance = mock_client_class.return_value
 
-    # Initialize solver with a timeout
-    solver = ReMIPSolver(stream=True, timeout=60)
-    # We don't need to check the result, just that the correct URL was called
-    solver.solve(lp_problem)
+    solver = ReMIPSolver(stream=True, timeout=60, env="cpython")
+    solver.actualSolve(lp_problem)
 
-    # requests_mock will raise an error if the URL doesn't match, so no explicit assert is needed
-    # on the URL itself. We can assert it was called.
-    assert requests_mock.called
-    assert requests_mock.call_count == 1
+    mock_client_instance.solve.assert_called_once()
+    # The http_client's solve method is called with the lp_problem dict
+    call_args, call_kwargs = mock_client_instance.solve.call_args
+    assert "timeout" in call_kwargs
+    assert call_kwargs["timeout"] == 60
 
 
-def test_solve_with_enhancements(lp_problem, requests_mock):
+@patch("remip_client.http_client.RequestsHttpClient")
+def test_solve_with_enhancements(mock_client_class, lp_problem):
     solution = {
         "name": "Test_Problem",
         "status": "optimal",
         "objective_value": 1.0,
         "variables": {"x": 1.0},
         "mip_gap": 0.001,
-        "slacks": {"c1": 0.0},
-        "duals": {"c1": -1.0},
+        "slacks": {"_C1": 0.0},
+        "duals": {"_C1": -1.0},
         "reduced_costs": {"x": 0.0},
     }
-    requests_mock.post("http://localhost:8000/solve", json=solution)
+    mock_response = MagicMock()
+    mock_response.json.return_value = solution
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.solve.return_value = mock_response
 
-    solver = ReMIPSolver(stream=False)
-    status = solver.solve(lp_problem)
+    solver = ReMIPSolver(stream=False, env="cpython")
+    status = solver.actualSolve(lp_problem)
     assert status == constants.LpStatusOptimal
     assert lp_problem.objective.value == 1.0
     assert lp_problem.variables()[0].varValue == 1.0
 
-    assert hasattr(lp_problem, "mip_gap")
-    assert lp_problem.mip_gap == 0.001
-    assert hasattr(lp_problem, "slacks")
-    assert lp_problem.slacks == {"c1": 0.0}
-    assert hasattr(lp_problem, "duals")
-    assert lp_problem.duals == {"c1": -1.0}
-    assert hasattr(lp_problem, "reduced_costs")
-    assert lp_problem.reduced_costs == {"x": 0.0}
+    assert hasattr(solver.solution, "mip_gap")
+    assert solver.solution.mip_gap == 0.001
+    assert hasattr(lp_problem.constraints["_C1"], "slack")
+    assert lp_problem.constraints["_C1"].slack == 0.0
+    assert hasattr(lp_problem.constraints["_C1"], "pi")
+    assert lp_problem.constraints["_C1"].pi == -1.0
+    assert hasattr(lp_problem.variables()[0], "dj")
+    assert lp_problem.variables()[0].dj == 0.0
