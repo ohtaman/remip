@@ -2,6 +2,7 @@
 name = "remip-client"
 dynamic = ["version"]
 description = "A client library for the MIP Solver API"
+readme = "README.md"
 authors = [
     { name = "ohtaman", email = "ohtamans@gmail.com" }
 ]
