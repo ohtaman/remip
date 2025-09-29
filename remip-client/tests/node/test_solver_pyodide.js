@@ -70,7 +70,6 @@ async function main() {
 
         console.log("Finding wheel...");
         const distDir = path.join(PROJECT_ROOT, "dist");
-        console.log(`distDir ----- ${distDir}`)
         const wheelFile = fs.readdirSync(distDir).find(file => file.endsWith(".whl"));
         if (!wheelFile) {
             throw new Error(`Could not find wheel file in ${distDir}.`);
